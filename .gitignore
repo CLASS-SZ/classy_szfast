@@ -4,3 +4,4 @@
 test_classy_szfast.py
 test_classy_szfast-mnu3state.py 
 __pycache__
+build/

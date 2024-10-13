@@ -12,3 +12,5 @@ from .custom_profiles.custom_profiles import *
 
 
 from .custom_bias.custom_bias import *
+
+path_to_class_sz_data = '/Users/boris/class_sz_data_directory'
