@@ -1,7 +1,9 @@
 from .utils import *
 from .config import *
 import numpy as np
-from .cosmopower import *
+from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars
+from .cosmopower import cp_tt_nn, cp_te_nn, cp_ee_nn, cp_ee_nn, cp_pp_nn, cp_pknl_nn, cp_pkl_nn, cp_der_nn, cp_da_nn, cp_h_nn, cp_s8_nn, cp_pkl_fftlog_alphas_real_nn, cp_pkl_fftlog_alphas_imag_nn, cp_pkl_fftlog_alphas_nus
+from .cosmopower_jax import cp_tt_nn_jax, cp_te_nn_jax, cp_ee_nn_jax, cp_ee_nn_jax, cp_pp_nn_jax, cp_pknl_nn_jax, cp_pkl_nn_jax, cp_der_nn_jax, cp_da_nn_jax, cp_h_nn_jax, cp_s8_nn_jax
 from .pks_and_sigmas import *
 import scipy
 import time
@@ -9,7 +11,8 @@ from multiprocessing import Process
 from mcfit import TophatVar
 from scipy.interpolate import CubicSpline
 import pickle
-
+import jax.numpy as jnp
+import jax.scipy as jscipy
 
 H_units_conv_factor = {"1/Mpc": 1, "km/s/Mpc": Const.c_km_s}
 
@@ -69,6 +72,11 @@ class Class_szfast(object):
         except:
             pass
         self.logger = logging.getLogger(__name__)
+
+
+        self.jax_mode = params_settings["jax"]
+
+        # print(f"JAX mode: {self.jax_mode}")
         
 
         
@@ -85,7 +93,12 @@ class Class_szfast(object):
         self.cp_pkl_nn = cp_pkl_nn
         self.cp_der_nn = cp_der_nn
         self.cp_da_nn = cp_da_nn
-        self.cp_h_nn = cp_h_nn
+        
+        if self.jax_mode:
+            self.cp_h_nn = cp_h_nn_jax
+        else:
+            self.cp_h_nn = cp_h_nn
+
         self.cp_s8_nn = cp_s8_nn
 
         self.emulator_dict = emulator_dict
@@ -203,6 +216,7 @@ class Class_szfast(object):
 
 
         self.cp_z_interp = np.linspace(0.,20.,5000)
+        self.cp_z_interp_jax = jnp.linspace(0.,20.,5000)
 
         self.csz_base = None
 
@@ -409,6 +423,11 @@ class Class_szfast(object):
 
         k_arr = self.cszfast_pk_grid_k 
 
+        # print(">>> z_arr:",z_arr)
+        # print(">>> k_arr:",k_arr)
+        # import sys
+        
+
 
         params_values = params_values_dict.copy()
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
@@ -445,6 +464,11 @@ class Class_szfast(object):
                 params_dict_pp['z_pk_save_nonclass'] = [zp]
                 predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
+                # if abs(zp-0.5) < 0.01:
+                #   print(">>> predicted_pk_spectrum_z:",predicted_pk_spectrum_z[-1])
+                #   import pprint
+                #   pprint.pprint(params_dict_pp)
+       
         predicted_pk_spectrum = np.asarray(predicted_pk_spectrum_z)
 
 
@@ -452,6 +476,10 @@ class Class_szfast(object):
 
         pk_re = pk*self.pk_power_fac
         pk_re = np.transpose(pk_re)
+
+        # print(">>> pk_re:",pk_re)
+        # import sys
+        # sys.exit(0)
 
         self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,np.log(pk_re).T,logP=True)
 
@@ -708,17 +736,44 @@ class Class_szfast(object):
             if isinstance(params_dict['m_ncdm'][0],str): 
                 params_dict['m_ncdm'] =  [float(params_dict['m_ncdm'][0].split(',')[0])]
 
-        self.cp_predicted_hubble = self.cp_h_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
- 
-        self.hz_interp = scipy.interpolate.interp1d(
-                                            self.cp_z_interp,
-                                            self.cp_predicted_hubble,
-                                            kind='linear',
-                                            axis=-1,
-                                            copy=True,
-                                            bounds_error=None,
-                                            fill_value=np.nan,
-                                            assume_sorted=False)
+
+        if self.jax_mode:
+            # print("JAX MODE in hubble")
+            # self.cp_predicted_hubble = self.cp_h_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
+            # print(params_dict)
+            self.cp_predicted_hubble = self.cp_h_nn[self.cosmo_model].predict(params_dict)
+            # print("self.cp_predicted_hubble",self.cp_predicted_hubble)
+
+            # self.hz_interp = jscipy.interpolate.interp1d(
+            #                                     self.cp_z_interp_jax,
+            #                                     self.cp_predicted_hubble,
+            #                                     kind='linear',
+            #                                     axis=-1,
+            #                                     copy=True,
+            #                                     bounds_error=None,
+            #                                     fill_value=np.nan,
+            #                                     assume_sorted=False)
+            
+            # Assuming `cp_z_interp` and `cp_predicted_hubble` are JAX arrays
+            def hz_interp(x):
+                return jnp.interp(x, self.cp_z_interp_jax, self.cp_predicted_hubble, left=jnp.nan, right=jnp.nan)
+
+            self.hz_interp = hz_interp
+            # exit()
+        else:
+            self.cp_predicted_hubble = self.cp_h_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
+            # print("self.cp_predicted_hubble",self.cp_predicted_hubble)
+            
+
+            self.hz_interp = scipy.interpolate.interp1d(
+                                                self.cp_z_interp,
+                                                self.cp_predicted_hubble,
+                                                kind='linear',
+                                                axis=-1,
+                                                copy=True,
+                                                bounds_error=None,
+                                                fill_value=np.nan,
+                                                assume_sorted=False)
 
     def calculate_chi(self,
                       **params_values_dict):
@@ -819,7 +874,10 @@ class Class_szfast(object):
 
 
     def get_hubble(self, z,units="1/Mpc"):
-        return np.array(self.hz_interp(z)*H_units_conv_factor[units])
+        if self.jax_mode:
+            return jnp.array(self.hz_interp(z)*H_units_conv_factor[units])
+        else:
+            return np.array(self.hz_interp(z)*H_units_conv_factor[units])
 
     def get_chi(self, z):
         return np.array(self.chi_interp(z))
