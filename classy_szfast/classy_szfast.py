@@ -741,7 +741,9 @@ class Class_szfast(object):
             # print("JAX MODE in hubble")
             # self.cp_predicted_hubble = self.cp_h_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
             # print(params_dict)
+            # print("params_dict type:", type(params_dict))
             self.cp_predicted_hubble = self.cp_h_nn[self.cosmo_model].predict(params_dict)
+            # print("self.cp_predicted_hubble type:", type(self.cp_predicted_hubble))
             # print("self.cp_predicted_hubble",self.cp_predicted_hubble)
 
             # self.hz_interp = jscipy.interpolate.interp1d(
