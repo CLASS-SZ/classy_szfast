@@ -3,7 +3,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-version = "0.0.25.post3"
+version = "0.0.25.post4"
 license = { text = "MIT" }
 name = "classy_szfast"
 maintainers = [{name = "Boris Bolliet",email="bb667@cam.ac.uk"}]
