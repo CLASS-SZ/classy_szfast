@@ -92,12 +92,14 @@ class Class_szfast(object):
         self.cp_pknl_nn  = cp_pknl_nn
         self.cp_pkl_nn = cp_pkl_nn
         self.cp_der_nn = cp_der_nn
-        self.cp_da_nn = cp_da_nn
+       
         
         if self.jax_mode:
             self.cp_h_nn = cp_h_nn_jax
+            self.cp_da_nn = cp_da_nn_jax
         else:
             self.cp_h_nn = cp_h_nn
+            self.cp_da_nn = cp_da_nn
 
         self.cp_s8_nn = cp_s8_nn
 
@@ -785,35 +787,50 @@ class Class_szfast(object):
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
 
         params_dict = {}
-
         for k,v in zip(params_values.keys(),params_values.values()):
-        
             params_dict[k]=[v]
 
         if 'm_ncdm' in params_dict.keys():
             if isinstance(params_dict['m_ncdm'][0],str): 
                 params_dict['m_ncdm'] =  [float(params_dict['m_ncdm'][0].split(',')[0])]
 
-        # deal with different scaling of DA in different model from emulator training
-        if self.cosmo_model == 'ede-v2':
+        if self.jax_mode: 
+            # print("JAX MODE in chi")
+            # self.cp_da_nn[self.cosmo_model].log = False
+            self.cp_predicted_da = self.cp_da_nn[self.cosmo_model].predict(params_dict)
+            # print("self.cp_predicted_da",self.cp_predicted_da)
 
-            self.cp_predicted_da  = self.cp_da_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
-            self.cp_predicted_da = np.insert(self.cp_predicted_da, 0, 0)
-        
+            if self.cosmo_model == 'ede-v2':
+                # print('ede-v2 case')
+                self.cp_predicted_da = jnp.insert(self.cp_predicted_da, 0, 0)
+            self.cp_predicted_da *= (1.+self.cp_z_interp_jax)
+    
+            def chi_interp(x):
+                return jnp.interp(x, self.cp_z_interp_jax, self.cp_predicted_da, left=jnp.nan, right=jnp.nan)
+
+            self.chi_interp = chi_interp
+
         else:
-        
-            self.cp_predicted_da  = self.cp_da_nn[self.cosmo_model].predictions_np(params_dict)[0]
-        
+            # deal with different scaling of DA in different model from emulator training
+            if self.cosmo_model == 'ede-v2':
 
-        self.chi_interp = scipy.interpolate.interp1d(
-                                                    self.cp_z_interp,
-                                                    self.cp_predicted_da*(1.+self.cp_z_interp),
-                                                    kind='linear',
-                                                    axis=-1,
-                                                    copy=True,
-                                                    bounds_error=None,
-                                                    fill_value=np.nan,
-                                                    assume_sorted=False)
+                self.cp_predicted_da  = self.cp_da_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
+                self.cp_predicted_da = np.insert(self.cp_predicted_da, 0, 0)
+            
+            else:
+            
+                self.cp_predicted_da  = self.cp_da_nn[self.cosmo_model].predictions_np(params_dict)[0]
+            
+
+            self.chi_interp = scipy.interpolate.interp1d(
+                                                        self.cp_z_interp,
+                                                        self.cp_predicted_da*(1.+self.cp_z_interp),
+                                                        kind='linear',
+                                                        axis=-1,
+                                                        copy=True,
+                                                        bounds_error=None,
+                                                        fill_value=np.nan,
+                                                        assume_sorted=False)
 
     def get_cmb_cls(self,ell_factor=True,Tcmb_uk = Tcmb_uk):
 
