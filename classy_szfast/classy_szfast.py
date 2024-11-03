@@ -1,7 +1,7 @@
 from .utils import *
 from .config import *
 import numpy as np
-from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars
+from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list
 from .cosmopower import cp_tt_nn, cp_te_nn, cp_ee_nn, cp_ee_nn, cp_pp_nn, cp_pknl_nn, cp_pkl_nn, cp_der_nn, cp_da_nn, cp_h_nn, cp_s8_nn, cp_pkl_fftlog_alphas_real_nn, cp_pkl_fftlog_alphas_imag_nn, cp_pkl_fftlog_alphas_nus
 from .cosmopower_jax import cp_tt_nn_jax, cp_te_nn_jax, cp_ee_nn_jax, cp_ee_nn_jax, cp_pp_nn_jax, cp_pknl_nn_jax, cp_pkl_nn_jax, cp_der_nn_jax, cp_da_nn_jax, cp_h_nn_jax, cp_s8_nn_jax
 from .pks_and_sigmas import *
@@ -76,12 +76,9 @@ class Class_szfast(object):
 
         self.jax_mode = params_settings["jax"]
 
+ 
         # print(f"JAX mode: {self.jax_mode}")
         
-
-        
-
-
 
         # cosmopower emulators
         # self.cp_path_to_cosmopower_organization = path_to_cosmopower_organization + '/'
@@ -90,67 +87,11 @@ class Class_szfast(object):
         self.cp_ee_nn = cp_ee_nn
         self.cp_pp_nn = cp_pp_nn
         self.cp_pknl_nn  = cp_pknl_nn
-        self.cp_pkl_nn = cp_pkl_nn
         self.cp_der_nn = cp_der_nn
        
-        
-        if self.jax_mode:
-            self.cp_h_nn = cp_h_nn_jax
-            self.cp_da_nn = cp_da_nn_jax
-        else:
-            self.cp_h_nn = cp_h_nn
-            self.cp_da_nn = cp_da_nn
-
-        self.cp_s8_nn = cp_s8_nn
-
-        self.emulator_dict = emulator_dict
-
-        if dofftlog_alphas == True:
-            self.cp_pkl_fftlog_alphas_nus = cp_pkl_fftlog_alphas_nus
-            self.cp_pkl_fftlog_alphas_real_nn  = cp_pkl_fftlog_alphas_real_nn
-            self.cp_pkl_fftlog_alphas_imag_nn = cp_pkl_fftlog_alphas_imag_nn
-
-        self.cosmo_model = 'ede-v2'
-        self.use_Amod = 0
-        self.Amod = 0 
-
         self.cp_lmax = cp_l_max_scalars
-        self.cp_ls = np.arange(2,self.cp_lmax+1)
 
-
-
-        
-        cosmo_model_dict = {0: 'lcdm',
-                            1: 'mnu',
-                            2: 'neff',
-                            3: 'wcdm',
-                            4: 'ede',
-                            5: 'mnu-3states',
-                            6: 'ede-v2'
-                            }
-        
-
-        if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
-
-            self.cp_ndspl_k = 1
-            self.cp_nk = 1000
-        
-        else:
-        
-            self.cp_ndspl_k = 10
-            self.cp_nk = 5000
-
-        self.cp_predicted_tt_spectrum =np.zeros(self.cp_lmax)
-        self.cp_predicted_te_spectrum =np.zeros(self.cp_lmax)
-        self.cp_predicted_ee_spectrum =np.zeros(self.cp_lmax)
-        self.cp_predicted_pp_spectrum =np.zeros(self.cp_lmax)
-
-
-        self.cszfast_ldim = 20000 # used for the cls arrays
-
-        self.cszfast_pk_grid_nz = 100 # has to be same as narraySZ, i.e., ndim_redshifts; it is setup hereafter if ndim_redshifts is passed
-        
-
+        cosmo_model_dict = {i: model for i, model in enumerate(cosmo_model_list)}
 
         if (cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2'):
         
@@ -173,27 +114,94 @@ class Class_szfast(object):
             # self.logger.info(f">>> using kmin = {self.cp_kmin}")
             # self.logger.info(f">>> using kmax = {self.cp_kmax}")
             # self.logger.info(f">>> using zmax = {self.cszfast_pk_grid_zmax}")
+        
+        if self.jax_mode:
+            self.cp_h_nn = cp_h_nn_jax
+            self.cp_da_nn = cp_da_nn_jax
+            self.cp_pkl_nn = cp_pkl_nn_jax
 
-        self.cszfast_pk_grid_z = np.linspace(0.,self.cszfast_pk_grid_zmax,self.cszfast_pk_grid_nz)
+            self.pi = jnp.pi
+            self.transpose = jnp.transpose
+            self.asarray = jnp.asarray
+
+            self.linspace = jnp.linspace
+            self.geomspace = jnp.geomspace
+            self.arange = jnp.arange
+            self.zeros = jnp.zeros
+
+
+        else:
+            self.cp_h_nn = cp_h_nn
+            self.cp_da_nn = cp_da_nn
+            self.cp_pkl_nn = cp_pkl_nn
+
+            self.pi = np.pi
+            self.transpose = np.transpose
+
+            self.linspace = np.linspace
+            self.geomspace = np.geomspace
+            self.arange = np.arange
+            self.zeros = np.zeros
+            self.asarray = np.asarray
+
+
+
+        self.cp_ls = self.arange(2,self.cp_lmax+1)
+        self.cp_predicted_tt_spectrum =self.zeros(self.cp_lmax)
+        self.cp_predicted_te_spectrum =self.zeros(self.cp_lmax)
+        self.cp_predicted_ee_spectrum =self.zeros(self.cp_lmax)
+        self.cp_predicted_pp_spectrum =self.zeros(self.cp_lmax)
+
+        self.cp_s8_nn = cp_s8_nn
+
+        self.emulator_dict = emulator_dict
+
+        if dofftlog_alphas == True:
+            self.cp_pkl_fftlog_alphas_nus = cp_pkl_fftlog_alphas_nus
+            self.cp_pkl_fftlog_alphas_real_nn  = cp_pkl_fftlog_alphas_real_nn
+            self.cp_pkl_fftlog_alphas_imag_nn = cp_pkl_fftlog_alphas_imag_nn
+
+        self.cosmo_model = 'ede-v2'
+        self.use_Amod = 0
+        self.Amod = 0 
+
+        
+
+        if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
+
+            self.cp_ndspl_k = 1
+            self.cp_nk = 1000
+        
+        else:
+        
+            self.cp_ndspl_k = 10
+            self.cp_nk = 5000
+
+
+        self.cszfast_ldim = 20000 # used for the cls arrays
+        self.cszfast_pk_grid_nz = 100 # has to be same as narraySZ, i.e., ndim_redshifts; it is setup hereafter if ndim_redshifts is passed
+        
+
+        self.cszfast_pk_grid_z = self.linspace(0.,self.cszfast_pk_grid_zmax,self.cszfast_pk_grid_nz)
         self.cszfast_pk_grid_ln1pz = np.log(1.+self.cszfast_pk_grid_z)
 
 
-        self.cszfast_pk_grid_k = np.geomspace(self.cp_kmin,self.cp_kmax,self.cp_nk)[::self.cp_ndspl_k]
+        self.cszfast_pk_grid_k = self.geomspace(self.cp_kmin,self.cp_kmax,self.cp_nk)[::self.cp_ndspl_k]
         
         self.cszfast_pk_grid_lnk = np.log(self.cszfast_pk_grid_k)
         
-        self.cszfast_pk_grid_nk = len(np.geomspace(self.cp_kmin,self.cp_kmax,self.cp_nk)[::self.cp_ndspl_k]) # has to be same as ndimSZ, and the same as dimension of cosmopower pk emulators
+        self.cszfast_pk_grid_nk = len(self.geomspace(self.cp_kmin,self.cp_kmax,self.cp_nk)[::self.cp_ndspl_k]) # has to be same as ndimSZ, and the same as dimension of cosmopower pk emulators
         
         for k,v in params_settings.items():
 
             if k == 'ndim_redshifts':
                 
                 self.cszfast_pk_grid_nz = v
-                self.cszfast_pk_grid_z = np.linspace(0.,self.cszfast_pk_grid_zmax,self.cszfast_pk_grid_nz)
+                self.cszfast_pk_grid_z = self.linspace(0.,self.cszfast_pk_grid_zmax,self.cszfast_pk_grid_nz)
                 self.cszfast_pk_grid_ln1pz = np.log(1.+self.cszfast_pk_grid_z)
 
-                self.cszfast_pk_grid_pknl_flat = np.zeros(self.cszfast_pk_grid_nz*self.cszfast_pk_grid_nk)
-                self.cszfast_pk_grid_pkl_flat = np.zeros(self.cszfast_pk_grid_nz*self.cszfast_pk_grid_nk)
+                self.cszfast_pk_grid_pknl_flat = self.zeros(self.cszfast_pk_grid_nz*self.cszfast_pk_grid_nk)
+                self.cszfast_pk_grid_pkl_flat = self.zeros(self.cszfast_pk_grid_nz*self.cszfast_pk_grid_nk)
 
             if k == 'cosmo_model':
 
@@ -212,13 +220,12 @@ class Class_szfast(object):
         
         else:
 
-            ls = np.arange(2,self.cp_nk+2)[::self.cp_ndspl_k] # jan 10 ndspl
-            dls = ls*(ls+1.)/2./np.pi
+            ls = self.arange(2,self.cp_nk+2)[::self.cp_ndspl_k] # jan 10 ndspl
+            dls = ls*(ls+1.)/2./self.pi
             self.pk_power_fac= (dls)**-1
 
 
-        self.cp_z_interp = np.linspace(0.,20.,5000)
-        self.cp_z_interp_jax = jnp.linspace(0.,20.,5000)
+        self.cp_z_interp = self.linspace(0.,20.,5000)
 
         self.csz_base = None
 
@@ -226,7 +233,7 @@ class Class_szfast(object):
         self.cszfast_zgrid_zmin = 0.
         self.cszfast_zgrid_zmax = 4.
         self.cszfast_zgrid_nz = 250
-        self.cszfast_zgrid = np.linspace(self.cszfast_zgrid_zmin,
+        self.cszfast_zgrid = self.linspace(self.cszfast_zgrid_zmin,
                                          self.cszfast_zgrid_zmax,
                                          self.cszfast_zgrid_nz)
 
@@ -234,14 +241,14 @@ class Class_szfast(object):
         self.cszfast_mgrid_mmin = 1e10
         self.cszfast_mgrid_mmax = 1e15
         self.cszfast_mgrid_nm = 50
-        self.cszfast_mgrid = np.geomspace(self.cszfast_mgrid_mmin,
+        self.cszfast_mgrid = self.geomspace(self.cszfast_mgrid_mmin,
                                           self.cszfast_mgrid_mmax,
                                           self.cszfast_mgrid_nm)
 
         self.cszfast_gas_pressure_xgrid_xmin = 1e-2
         self.cszfast_gas_pressure_xgrid_xmax = 1e2
         self.cszfast_gas_pressure_xgrid_nx = 100
-        self.cszfast_gas_pressure_xgrid = np.geomspace(self.cszfast_gas_pressure_xgrid_xmin,
+        self.cszfast_gas_pressure_xgrid = self.geomspace(self.cszfast_gas_pressure_xgrid_xmin,
                                                        self.cszfast_gas_pressure_xgrid_xmax,
                                                        self.cszfast_gas_pressure_xgrid_nx)
         
@@ -312,7 +319,7 @@ class Class_szfast(object):
         creal = predicted_testing_alphas_creal
         cimag = predicted_testing_alphas_cimag
         Nmax = len(self.cszfast_pk_grid_k)
-        cnew = np.zeros(Nmax+1,dtype=complex)
+        cnew = self.zeros(Nmax+1,dtype=complex)
         for i in range(Nmax+1):
             if i<int(Nmax/2):
                 cnew[i] = complex(creal[i],cimag[i])
@@ -362,20 +369,20 @@ class Class_szfast(object):
 
         nl = len(self.cp_predicted_tt_spectrum)
         cls = {}
-        cls['ell'] = np.arange(20000)
-        cls['tt'] = np.zeros(20000)
-        cls['te'] = np.zeros(20000)
-        cls['ee'] = np.zeros(20000)
-        cls['pp'] = np.zeros(20000)
-        cls['bb'] = np.zeros(20000)
-        lcp = np.asarray(cls['ell'][2:nl+2])
+        cls['ell'] = self.arange(20000)
+        cls['tt'] = self.zeros(20000)
+        cls['te'] = self.zeros(20000)
+        cls['ee'] = self.zeros(20000)
+        cls['pp'] = self.zeros(20000)
+        cls['bb'] = self.zeros(20000)
+        lcp = self.asarray(cls['ell'][2:nl+2])
 
         # print('cosmo_model:',self.cosmo_model,nl)
         if self.cosmo_model == 'ede-v2':
             factor_ttteee = 1./lcp**2 
             factor_pp = 1./lcp**3
         else:
-            factor_ttteee = 1./(lcp*(lcp+1.)/2./np.pi)
+            factor_ttteee = 1./(lcp*(lcp+1.)/2./self.pi)
             factor_pp = 1./(lcp*(lcp+1.))**2.        
 
         self.cp_predicted_tt_spectrum *= factor_ttteee
@@ -402,7 +409,7 @@ class Class_szfast(object):
             cmb_cls_loaded = pickle.load(handle)
         nl_cls_file = len(cmb_cls_loaded['ell'])
         cls_ls = cmb_cls_loaded['ell']
-        dlfac = cls_ls*(cls_ls+1.)/2./np.pi
+        dlfac = cls_ls*(cls_ls+1.)/2./self.pi
         cls_tt = cmb_cls_loaded['tt']*dlfac
         cls_te = cmb_cls_loaded['te']*dlfac
         cls_ee = cmb_cls_loaded['ee']*dlfac
@@ -421,8 +428,6 @@ class Class_szfast(object):
                       **params_values_dict):
  
         z_arr = self.cszfast_pk_grid_z
-
-
         k_arr = self.cszfast_pk_grid_k 
 
         # print(">>> z_arr:",z_arr)
@@ -464,26 +469,32 @@ class Class_szfast(object):
             
                 params_dict_pp = params_dict.copy()
                 params_dict_pp['z_pk_save_nonclass'] = [zp]
-                predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
+                if self.jax_mode:
+                    predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predict(params_dict_pp))
+                else:
+                    predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
                 # if abs(zp-0.5) < 0.01:
                 #   print(">>> predicted_pk_spectrum_z:",predicted_pk_spectrum_z[-1])
                 #   import pprint
                 #   pprint.pprint(params_dict_pp)
        
-        predicted_pk_spectrum = np.asarray(predicted_pk_spectrum_z)
+        predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
 
         pk = 10.**predicted_pk_spectrum
 
         pk_re = pk*self.pk_power_fac
-        pk_re = np.transpose(pk_re)
+        pk_re = self.transpose(pk_re)
 
         # print(">>> pk_re:",pk_re)
         # import sys
         # sys.exit(0)
 
-        self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,np.log(pk_re).T,logP=True)
+        if self.jax_mode:
+            self.pkl_interp = None
+        else:
+            self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,np.log(pk_re).T,logP=True)
 
         self.cszfast_pk_grid_pk = pk_re
         self.cszfast_pk_grid_pkl_flat = pk_re.flatten()
@@ -570,7 +581,7 @@ class Class_szfast(object):
         s8z  = self.cp_s8_nn[self.cosmo_model].predictions_np(params_dict)
         # print(self.s8z)
         self.s8z_interp = scipy.interpolate.interp1d(
-                                                    np.linspace(0.,20.,5000),
+                                                    self.linspace(0.,20.,5000),
                                                     s8z[0],
                                                     kind='linear',
                                                     axis=-1,
@@ -609,13 +620,13 @@ class Class_szfast(object):
             params_dict_pp['z_pk_save_nonclass'] = [zp]
             predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
-        predicted_pk_spectrum = np.asarray(predicted_pk_spectrum_z)
+        predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
 
         pk = 10.**predicted_pk_spectrum
 
         pk_re = pk*self.pk_power_fac
-        pk_re = np.transpose(pk_re)
+        pk_re = self.transpose(pk_re)
 
 
         self.pknl_interp = PowerSpectrumInterpolator(z_arr,k_arr,np.log(pk_re).T,logP=True)
@@ -631,16 +642,12 @@ class Class_szfast(object):
                            z_asked,
                           params_values_dict=None):
 
-        z_arr = self.cszfast_pk_grid_z
 
         k_arr = self.cszfast_pk_grid_k 
 
         if params_values_dict:
-
             params_values = params_values_dict.copy()
-
         else:
-
             params_values = self.params_for_emulators
 
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
@@ -657,19 +664,21 @@ class Class_szfast(object):
 
         predicted_pk_spectrum_z = []
 
-        z_asked = z_asked
         params_dict_pp = params_dict.copy()
         update_params_with_defaults(params_dict_pp, self.emulator_dict[self.cosmo_model]['default'])
 
         params_dict_pp['z_pk_save_nonclass'] = [z_asked]
-        predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
+        if self.jax_mode:
+            predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predict(params_dict_pp))
+        else:
+            predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
-        predicted_pk_spectrum = np.asarray(predicted_pk_spectrum_z)
+        predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
 
         pk = 10.**predicted_pk_spectrum
         pk_re = pk*self.pk_power_fac
-        pk_re = np.transpose(pk_re)
+        pk_re = self.transpose(pk_re)
 
         
         return pk_re, k_arr
@@ -712,12 +721,12 @@ class Class_szfast(object):
         params_dict_pp['z_pk_save_nonclass'] = [z_asked]
         predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
-        predicted_pk_spectrum = np.asarray(predicted_pk_spectrum_z)
+        predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
 
         pk = 10.**predicted_pk_spectrum
         pk_re = pk*self.pk_power_fac
-        pk_re = np.transpose(pk_re)
+        pk_re = self.transpose(pk_re)
 
         
         return pk_re, k_arr
@@ -748,19 +757,10 @@ class Class_szfast(object):
             # print("self.cp_predicted_hubble type:", type(self.cp_predicted_hubble))
             # print("self.cp_predicted_hubble",self.cp_predicted_hubble)
 
-            # self.hz_interp = jscipy.interpolate.interp1d(
-            #                                     self.cp_z_interp_jax,
-            #                                     self.cp_predicted_hubble,
-            #                                     kind='linear',
-            #                                     axis=-1,
-            #                                     copy=True,
-            #                                     bounds_error=None,
-            #                                     fill_value=np.nan,
-            #                                     assume_sorted=False)
             
             # Assuming `cp_z_interp` and `cp_predicted_hubble` are JAX arrays
             def hz_interp(x):
-                return jnp.interp(x, self.cp_z_interp_jax, self.cp_predicted_hubble, left=jnp.nan, right=jnp.nan)
+                return jnp.interp(x, self.cp_z_interp, self.cp_predicted_hubble, left=jnp.nan, right=jnp.nan)
 
             self.hz_interp = hz_interp
             # exit()
@@ -803,10 +803,10 @@ class Class_szfast(object):
             if self.cosmo_model == 'ede-v2':
                 # print('ede-v2 case')
                 self.cp_predicted_da = jnp.insert(self.cp_predicted_da, 0, 0)
-            self.cp_predicted_da *= (1.+self.cp_z_interp_jax)
+            self.cp_predicted_da *= (1.+self.cp_z_interp)
     
             def chi_interp(x):
-                return jnp.interp(x, self.cp_z_interp_jax, self.cp_predicted_da, left=jnp.nan, right=jnp.nan)
+                return jnp.interp(x, self.cp_z_interp, self.cp_predicted_da, left=jnp.nan, right=jnp.nan)
 
             self.chi_interp = chi_interp
 
@@ -835,12 +835,12 @@ class Class_szfast(object):
     def get_cmb_cls(self,ell_factor=True,Tcmb_uk = Tcmb_uk):
 
         cls = {}
-        cls['ell'] = np.arange(self.cszfast_ldim)
-        cls['tt'] = np.zeros(self.cszfast_ldim)
-        cls['te'] = np.zeros(self.cszfast_ldim)
-        cls['ee'] = np.zeros(self.cszfast_ldim)
-        cls['pp'] = np.zeros(self.cszfast_ldim)
-        cls['bb'] = np.zeros(self.cszfast_ldim)
+        cls['ell'] = self.arange(self.cszfast_ldim)
+        cls['tt'] = self.zeros(self.cszfast_ldim)
+        cls['te'] = self.zeros(self.cszfast_ldim)
+        cls['ee'] = self.zeros(self.cszfast_ldim)
+        cls['pp'] = self.zeros(self.cszfast_ldim)
+        cls['bb'] = self.zeros(self.cszfast_ldim)
         cls['tt'][2:self.cp_lmax+1] = (Tcmb_uk)**2.*self.cp_predicted_tt_spectrum.copy()
         cls['te'][2:self.cp_lmax+1] = (Tcmb_uk)**2.*self.cp_predicted_te_spectrum.copy()
         cls['ee'][2:self.cp_lmax+1] = (Tcmb_uk)**2.*self.cp_predicted_ee_spectrum.copy()
@@ -848,12 +848,12 @@ class Class_szfast(object):
 
 
         if ell_factor==False:
-            fac_l = np.zeros(self.cszfast_ldim)
-            fac_l[2:self.cp_lmax+1] = 1./(cls['ell'][2:self.cp_lmax+1]*(cls['ell'][2:self.cp_lmax+1]+1.)/2./np.pi)
+            fac_l = self.zeros(self.cszfast_ldim)
+            fac_l[2:self.cp_lmax+1] = 1./(cls['ell'][2:self.cp_lmax+1]*(cls['ell'][2:self.cp_lmax+1]+1.)/2./self.pi)
             cls['tt'][2:self.cp_lmax+1] *= fac_l[2:self.cp_lmax+1]
             cls['te'][2:self.cp_lmax+1] *= fac_l[2:self.cp_lmax+1]
             cls['ee'][2:self.cp_lmax+1] *= fac_l[2:self.cp_lmax+1]
-            # cls['bb'] = np.zeros(self.cszfast_ldim)
+            # cls['bb'] = self.zeros(self.cszfast_ldim)
         return cls
 
 
@@ -899,7 +899,10 @@ class Class_szfast(object):
             return np.array(self.hz_interp(z)*H_units_conv_factor[units])
 
     def get_chi(self, z):
-        return np.array(self.chi_interp(z))
+        if self.jax_mode:
+            return jnp.array(self.chi_interp(z))
+        else:
+            return np.array(self.chi_interp(z))
 
     def get_gas_pressure_profile_x(self,z,m,x):
         return 0#np.vectorize(self.csz_base.get_pressure_P_over_P_delta_at_x_M_z_b12_200c)(x,m,z)
@@ -913,7 +916,7 @@ class Class_szfast(object):
 
 
     def tabulate_gas_pressure_profile_k(self):
-        z_asked,m_asked,x_asked = 0.2,3e14,np.geomspace(1e-3,1e2,500)
+        z_asked,m_asked,x_asked = 0.2,3e14,self.geomspace(1e-3,1e2,500)
         start = time.time()
         px = self.get_gas_pressure_profile_x(z_asked,m_asked,x_asked)
         end = time.time()

@@ -33,7 +33,7 @@ cosmopower_derived_params_names = ['100*theta_s',
                                    'ra_star',
                                    'rs_drag']
 
-cp_l_max_scalars = 11000 # max multipole of train ing data
+cp_l_max_scalars = 11000 # max multipole of training data
 
 cosmo_model_list = [
     'lcdm',
