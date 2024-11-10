@@ -70,3 +70,4 @@ class Const:
     # parameters entering in Stefan-Boltzmann constant sigma_B 
     _k_B_ = 1.3806504e-23
     _h_P_ = 6.62606896e-34
+    _M_sun_ =  1.98855e30 # solar mass in kg

@@ -283,8 +283,37 @@ class Class_szfast(object):
         params_values['Omega0_r'] = params_values['Omega0_ur']+params_values['Omega0_g']
         params_values['Omega0_m_nonu'] = params_values['Omega0_m'] - params_values['Omega0_ncdm']
         params_values['Omega0_cb'] = params_values['Omega0_m_nonu'] 
+        H0 = params_values['H0']*1.e3/Const._c_
+        params_values['Rho_crit_0'] = (3./(8.*self.pi*Const._G_*Const._M_sun_))*pow(Const._Mpc_over_m_,1)*self.pow(Const._c_,2)*self.pow(H0,2)/self.pow(params_values['h'],2)
         return params_values
 
+
+    def get_rho_crit_at_z(self,z,params_values_dict=None):
+        params_values = self.get_all_relevant_params(params_values_dict)
+        self.calculate_hubble(**params_values_dict)
+        H = self.hz_interp(z)
+        rho_crit = (3./(8.*self.pi*Const._G_*Const._M_sun_))*pow(Const._Mpc_over_m_,1)*self.pow(Const._c_,2)*self.pow(H,2)/self.pow(params_values['h'],2)
+        return rho_crit
+
+    def get_r_delta_of_m_delta_at_z(self,delta,m_delta,z,params_values_dict=None):
+        if params_values_dict:
+            params_values = params_values_dict.copy()
+        else:
+            params_values = self.params_for_emulators
+        rho_crit = self.get_rho_crit_at_z(z,params_values_dict=params_values_dict)
+        return (m_delta*3./4./self.pi/delta/rho_crit)**(1./3.)
+
+    def get_nu_at_z_and_m(self,z,m,params_values_dict=None):
+        if params_values_dict:
+            params_values = params_values_dict.copy()
+        else:
+            params_values = self.params_for_emulators
+
+        delta_c =  (3./20.)*self.pow(12.*self.pi,2./3.) # this is = 1.686470199841145
+        # note here we dont use matter dependent delta_c
+        # which would be multiplied by (1.+0.012299*log10(pvecback[pba->index_bg_Omega_m]));
+        sigma = 1. 
+        return (delta_c/sigma)**2 
 
 
     def find_As(self,params_cp):
