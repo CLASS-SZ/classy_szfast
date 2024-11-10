@@ -87,6 +87,8 @@ emulator_dict['lcdm']['default']['n_s'] = 0.9665
 emulator_dict['lcdm']['default']['N_ur'] = 2.0328
 emulator_dict['lcdm']['default']['N_ncdm'] = 1
 emulator_dict['lcdm']['default']['m_ncdm'] = 0.06
+emulator_dict['lcdm']['default']['deg_ncdm'] = 1
+emulator_dict['lcdm']['default']['T_cmb'] = 2.7255
 
 emulator_dict['mnu']['TT'] = 'TT_mnu_v1'
 emulator_dict['mnu']['TE'] = 'TE_mnu_v1'
@@ -107,7 +109,9 @@ emulator_dict['mnu']['default']['omega_cdm'] = 0.11933
 emulator_dict['mnu']['default']['n_s'] = 0.9665
 emulator_dict['mnu']['default']['N_ur'] = 2.0328
 emulator_dict['mnu']['default']['N_ncdm'] = 1
+emulator_dict['mnu']['default']['deg_ncdm'] = 1
 emulator_dict['mnu']['default']['m_ncdm'] = 0.06
+emulator_dict['mnu']['default']['T_cmb'] = 2.7255
 
 emulator_dict['neff']['TT'] = 'TT_neff_v1'
 emulator_dict['neff']['TE'] = 'TE_neff_v1'
@@ -128,8 +132,9 @@ emulator_dict['neff']['default']['omega_cdm'] = 0.11933
 emulator_dict['neff']['default']['n_s'] = 0.9665
 emulator_dict['neff']['default']['N_ur'] = 2.0328 # this is the default value in class v2 to get Neff = 3.046
 emulator_dict['neff']['default']['N_ncdm'] = 1
+emulator_dict['neff']['default']['deg_ncdm'] = 1
 emulator_dict['neff']['default']['m_ncdm'] = 0.06
-
+emulator_dict['neff']['default']['T_cmb'] = 2.7255
 
 emulator_dict['wcdm']['TT'] = 'TT_w_v1'
 emulator_dict['wcdm']['TE'] = 'TE_w_v1'
@@ -151,6 +156,9 @@ emulator_dict['wcdm']['default']['n_s'] = 0.9665
 emulator_dict['wcdm']['default']['N_ur'] = 2.0328 # this is the default value in class v2 to get Neff = 3.046
 emulator_dict['wcdm']['default']['N_ncdm'] = 1
 emulator_dict['wcdm']['default']['m_ncdm'] = 0.06
+emulator_dict['wcdm']['default']['deg_ncdm'] = 1
+emulator_dict['wcdm']['default']['T_cmb'] = 2.7255
+
 
 emulator_dict['ede']['TT'] = 'TT_v1'
 emulator_dict['ede']['TE'] = 'TE_v1'
@@ -174,9 +182,10 @@ emulator_dict['ede']['default']['log10z_c'] = 3.562 # e.g. from https://github.c
 emulator_dict['ede']['default']['thetai_scf'] = 2.83 # e.g. from https://github.com/mwt5345/class_ede/blob/master/class/notebooks-ede/2-CMB-Comparison.ipynb
 emulator_dict['ede']['default']['r'] = 0.
 emulator_dict['ede']['default']['N_ur'] = 0.00641 # this is the default value in class v2 to get Neff = 3.046
-emulator_dict['ede']['default']['N_ncdm'] = 3
+emulator_dict['ede']['default']['N_ncdm'] = 1 ### use equivalence with deg_ncdm = 3
+emulator_dict['ede']['default']['deg_ncdm'] = 3 ### use equivalence with deg_ncdm = 3 for faster computation
 emulator_dict['ede']['default']['m_ncdm'] = 0.02
-
+emulator_dict['ede']['default']['T_cmb'] = 2.7255
 
 emulator_dict['mnu-3states']['TT'] = 'TT_v1'
 emulator_dict['mnu-3states']['TE'] = 'TE_v1'
@@ -196,8 +205,10 @@ emulator_dict['mnu-3states']['default']['omega_b'] = 0.02242
 emulator_dict['mnu-3states']['default']['omega_cdm'] = 0.11933
 emulator_dict['mnu-3states']['default']['n_s'] = 0.9665
 emulator_dict['mnu-3states']['default']['N_ur'] = 0.00641 # this is the default value in class v2 to get Neff = 3.046
-emulator_dict['mnu-3states']['default']['N_ncdm'] = 3
+emulator_dict['mnu-3states']['default']['N_ncdm'] = 1 ### use equivalence with deg_ncdm = 3
+emulator_dict['mnu-3states']['default']['deg_ncdm'] = 3 ### use equivalence with deg_ncdm = 3 for faster computation
 emulator_dict['mnu-3states']['default']['m_ncdm'] = 0.02
+emulator_dict['mnu-3states']['default']['T_cmb'] = 2.7255
 
 emulator_dict['ede-v2']['TT'] = 'TT_v2'
 emulator_dict['ede-v2']['TE'] = 'TE_v2'
@@ -222,9 +233,10 @@ emulator_dict['ede-v2']['default']['log10z_c'] = 3.562 # e.g. from https://githu
 emulator_dict['ede-v2']['default']['thetai_scf'] = 2.83 # e.g. from https://github.com/mwt5345/class_ede/blob/master/class/notebooks-ede/2-CMB-Comparison.ipynb
 emulator_dict['ede-v2']['default']['r'] = 0.
 emulator_dict['ede-v2']['default']['N_ur'] = 0.00441 # this is the default value in class v3 to get Neff = 3.044
-emulator_dict['ede-v2']['default']['N_ncdm'] = 3
+emulator_dict['ede-v2']['default']['N_ncdm'] = 1 ### use equivalence with deg_ncdm = 3
+emulator_dict['ede-v2']['default']['deg_ncdm'] = 3 ### use equivalence with deg_ncdm = 3 for faster computation
 emulator_dict['ede-v2']['default']['m_ncdm'] = 0.02
-
+emulator_dict['ede-v2']['default']['T_cmb'] = 2.7255
 
 
 

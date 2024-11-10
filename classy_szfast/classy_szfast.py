@@ -1,4 +1,5 @@
 from .utils import *
+from .utils import Const
 from .config import *
 import numpy as np
 from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list
@@ -123,11 +124,16 @@ class Class_szfast(object):
             self.pi = jnp.pi
             self.transpose = jnp.transpose
             self.asarray = jnp.asarray
+            self.log = jnp.log
+            self.pow = jnp.power
+
+            self.sigma_B = 2. * self.pow(self.pi,5) * self.pow(Const._k_B_,4) / 15. / self.pow(Const._h_P_,3) / self.pow(Const._c_,2)
 
             self.linspace = jnp.linspace
             self.geomspace = jnp.geomspace
             self.arange = jnp.arange
             self.zeros = jnp.zeros
+            self.gradient = jnp.gradient
 
 
         else:
@@ -137,13 +143,18 @@ class Class_szfast(object):
 
             self.pi = np.pi
             self.transpose = np.transpose
+            self.pow = np.power
+
+            self.sigma_B = 2. * self.pow(self.pi,5) * self.pow(Const._k_B_,4) / 15. / self.pow(Const._h_P_,3) / self.pow(Const._c_,2)
+
 
             self.linspace = np.linspace
             self.geomspace = np.geomspace
             self.arange = np.arange
             self.zeros = np.zeros
             self.asarray = np.asarray
-
+            self.log = np.log
+            self.gradient = np.gradient
 
 
         self.cp_ls = self.arange(2,self.cp_lmax+1)
@@ -183,12 +194,12 @@ class Class_szfast(object):
         
 
         self.cszfast_pk_grid_z = self.linspace(0.,self.cszfast_pk_grid_zmax,self.cszfast_pk_grid_nz)
-        self.cszfast_pk_grid_ln1pz = np.log(1.+self.cszfast_pk_grid_z)
+        self.cszfast_pk_grid_ln1pz = self.log(1.+self.cszfast_pk_grid_z)
 
 
         self.cszfast_pk_grid_k = self.geomspace(self.cp_kmin,self.cp_kmax,self.cp_nk)[::self.cp_ndspl_k]
         
-        self.cszfast_pk_grid_lnk = np.log(self.cszfast_pk_grid_k)
+        self.cszfast_pk_grid_lnk = self.log(self.cszfast_pk_grid_k)
         
         self.cszfast_pk_grid_nk = len(self.geomspace(self.cp_kmin,self.cp_kmax,self.cp_nk)[::self.cp_ndspl_k]) # has to be same as ndimSZ, and the same as dimension of cosmopower pk emulators
         
@@ -198,7 +209,7 @@ class Class_szfast(object):
                 
                 self.cszfast_pk_grid_nz = v
                 self.cszfast_pk_grid_z = self.linspace(0.,self.cszfast_pk_grid_zmax,self.cszfast_pk_grid_nz)
-                self.cszfast_pk_grid_ln1pz = np.log(1.+self.cszfast_pk_grid_z)
+                self.cszfast_pk_grid_ln1pz = self.log(1.+self.cszfast_pk_grid_z)
 
                 self.cszfast_pk_grid_pknl_flat = self.zeros(self.cszfast_pk_grid_nz*self.cszfast_pk_grid_nk)
                 self.cszfast_pk_grid_pkl_flat = self.zeros(self.cszfast_pk_grid_nz*self.cszfast_pk_grid_nk)
@@ -253,6 +264,28 @@ class Class_szfast(object):
                                                        self.cszfast_gas_pressure_xgrid_nx)
         
         self.params_for_emulators = {}
+
+
+    def get_all_relevant_params(self,params_values_dict=None):
+        if params_values_dict:
+            params_values = params_values_dict.copy()
+        else:
+            params_values = self.params_for_emulators
+        update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
+        params_values['h'] = params_values['H0']/100.
+        params_values['Omega_b'] = params_values['omega_b']/params_values['h']**2.
+        params_values['Omega_cdm'] = params_values['omega_cdm']/params_values['h']**2.
+        params_values['Omega0_g'] = (4.*self.sigma_B/Const._c_*pow(params_values['T_cmb'],4.)) / (3.*Const._c_*Const._c_*1.e10*params_values['h']*params_values['h']/Const._Mpc_over_m_/Const._Mpc_over_m_/8./self.pi/Const._G_)
+        params_values['Omega0_ur'] = params_values['N_ur']*7./8.*self.pow(4./11.,4./3.)*params_values['Omega0_g']
+        params_values['Omega0_ncdm'] = params_values['deg_ncdm']*params_values['m_ncdm']/(93.14*params_values['h']*params_values['h']) ## valid only in standard cases, default T_ncdm etc
+        params_values['Omega_Lambda'] = 1. - params_values['Omega0_g'] - params_values['Omega_b'] - params_values['Omega_cdm'] - params_values['Omega0_ncdm'] - params_values['Omega0_ur']
+        params_values['Omega0_m'] = params_values['Omega_cdm'] + params_values['Omega_b'] + params_values['Omega0_ncdm']
+        params_values['Omega0_r'] = params_values['Omega0_ur']+params_values['Omega0_g']
+        params_values['Omega0_m_nonu'] = params_values['Omega0_m'] - params_values['Omega0_ncdm']
+        params_values['Omega0_cb'] = params_values['Omega0_m_nonu'] 
+        return params_values
+
+
 
     def find_As(self,params_cp):
 
@@ -494,7 +527,7 @@ class Class_szfast(object):
         if self.jax_mode:
             self.pkl_interp = None
         else:
-            self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,np.log(pk_re).T,logP=True)
+            self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,self.log(pk_re).T,logP=True)
 
         self.cszfast_pk_grid_pk = pk_re
         self.cszfast_pk_grid_pkl_flat = pk_re.flatten()
@@ -502,9 +535,7 @@ class Class_szfast(object):
         return pk_re, k_arr, z_arr
 
 
-    def calculate_sigma(self,
-                        
-                        **params_values_dict):
+    def calculate_sigma(self,**params_values_dict):
 
         params_values = params_values_dict.copy()
 
@@ -520,7 +551,7 @@ class Class_szfast(object):
 
             R, var[:,iz] = TophatVar(k, lowring=True)(P[:,iz], extrap=True)
 
-            dvar[:,iz] = np.gradient(var[:,iz], R)
+            dvar[:,iz] = self.gradient(var[:,iz], R)
 
         # print(k)
         # print(R)
@@ -528,11 +559,11 @@ class Class_szfast(object):
         # exit(0)
  
 
-        self.cszfast_pk_grid_lnr = np.log(R)
+        self.cszfast_pk_grid_lnr = self.log(R)
         self.cszfast_pk_grid_sigma2 = var
  
         self.cszfast_pk_grid_sigma2_flat = var.flatten()
-        self.cszfast_pk_grid_lnsigma2_flat = 0.5*np.log(var.flatten())
+        self.cszfast_pk_grid_lnsigma2_flat = 0.5*self.log(var.flatten())
  
         self.cszfast_pk_grid_dsigma2 = dvar
         self.cszfast_pk_grid_dsigma2_flat = dvar.flatten()
@@ -629,7 +660,7 @@ class Class_szfast(object):
         pk_re = self.transpose(pk_re)
 
 
-        self.pknl_interp = PowerSpectrumInterpolator(z_arr,k_arr,np.log(pk_re).T,logP=True)
+        self.pknl_interp = PowerSpectrumInterpolator(z_arr,k_arr,self.log(pk_re).T,logP=True)
 
 
         self.cszfast_pk_grid_pknl = pk_re
@@ -637,6 +668,8 @@ class Class_szfast(object):
 
         return pk_re, k_arr, z_arr
     
+
+
 
     def calculate_pkl_at_z(self,
                            z_asked,
@@ -860,9 +893,9 @@ class Class_szfast(object):
     def get_pknl_at_k_and_z(self,k_asked,z_asked):
     # def get_pkl_at_k_and_z(self,k_asked,z_asked,method = 'cloughtocher'):
         # if method == 'linear':
-        #     pk = self.pkl_linearnd_interp(z_asked,np.log(k_asked))
+        #     pk = self.pkl_linearnd_interp(z_asked,self.log(k_asked))
         # elif method == 'cloughtocher':
-        #     pk = self.pkl_cloughtocher_interp(z_asked,np.log(k_asked))
+        #     pk = self.pkl_cloughtocher_interp(z_asked,self.log(k_asked))
         # return np.exp(pk)
         return self.pknl_interp.P(z_asked,k_asked)
 
@@ -870,18 +903,18 @@ class Class_szfast(object):
     # def get_pkl_at_k_and_z(self,k_asked,z_asked,method = 'cloughtocher'):
     def get_pkl_at_k_and_z(self,k_asked,z_asked):
         # if method == 'linear':
-        #     pk = self.pknl_linearnd_interp(z_asked,np.log(k_asked))
+        #     pk = self.pknl_linearnd_interp(z_asked,self.log(k_asked))
         # elif method == 'cloughtocher':
-        #     pk = self.pknl_cloughtocher_interp(z_asked,np.log(k_asked))
+        #     pk = self.pknl_cloughtocher_interp(z_asked,self.log(k_asked))
         # return np.exp(pk)
         return self.pkl_interp.P(z_asked,k_asked)
 
     # function used to overwrite the classy function in fast mode.
     def get_sigma_at_r_and_z(self,r_asked,z_asked):
         # if method == 'linear':
-        #     pk = self.pknl_linearnd_interp(z_asked,np.log(k_asked))
+        #     pk = self.pknl_linearnd_interp(z_asked,self.log(k_asked))
         # elif method == 'cloughtocher':
-        #     pk = self.pknl_cloughtocher_interp(z_asked,np.log(k_asked))
+        #     pk = self.pknl_cloughtocher_interp(z_asked,self.log(k_asked))
         # return np.exp(pk)
         k = self.cszfast_pk_grid_k
         P_at_z = self.get_pkl_at_k_and_z(k,z_asked)
