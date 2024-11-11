@@ -575,13 +575,17 @@ class Class_szfast(object):
         var = P.copy()
 
         dvar = P.copy()
+        # dvar_grads = P.copy()
 
         for iz,zp in enumerate(self.cszfast_pk_grid_z):
 
             R, var[:,iz] = TophatVar(k, lowring=True)(P[:,iz], extrap=True)
 
-            dvar[:,iz] = self.gradient(var[:,iz], R)
+            # dvar[:,iz] = self.gradient(var[:,iz], R) ## old form
+            _, dvar[:,iz] = TophatVar(k, lowring=True, deriv=1)(P[:,iz]*k, extrap=True) # new form 
 
+        # dvar = dvar/(2.*np.sqrt(var))
+        # print(dvar_grads/dvar)
         # print(k)
         # print(R)
         # print(k*R)
