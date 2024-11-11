@@ -22,8 +22,8 @@ cp_s8_nn_jax = {}
 
 
 class CosmoPowerJAX_custom(CPJ):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
+    def __init__(self, verbose=False, *args, **kwargs):
+        super().__init__(verbose=verbose, *args, **kwargs)
         self.ten_to_predictions = True
         if 'ten_to_predictions' in kwargs.keys():
             self.ten_to_predictions = kwargs['ten_to_predictions']

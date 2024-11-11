@@ -4,7 +4,7 @@ import get_cosmopower_emus
 import class_sz_data
 
 def get_cosmopower_path():
-    get_cosmopower_emus.set()
+    get_cosmopower_emus.set_path()
     return os.getenv('PATH_TO_CLASS_SZ_DATA')
 
 path_to_class_sz_data = get_cosmopower_path()
