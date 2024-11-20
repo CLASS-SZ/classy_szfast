@@ -294,6 +294,16 @@ class Class_szfast(object):
         H = self.hz_interp(z)
         rho_crit = (3./(8.*self.pi*Const._G_*Const._M_sun_))*pow(Const._Mpc_over_m_,1)*self.pow(Const._c_,2)*self.pow(H,2)/self.pow(params_values['h'],2)
         return rho_crit
+    
+    def get_volume_dVdzdOmega_at_z(self,z,params_values_dict=None):
+        params_values = self.get_all_relevant_params(params_values_dict)
+        self.calculate_hubble(**params_values_dict)
+        Ez = self.hz_interp(z)/self.hz_interp(0.)
+        self.calculate_chi(**params_values_dict)
+        dA = self.chi_interp(z)/(1.+z)
+        rz = dA*(1.+z)*params_values['h']
+        dVdzdOmega = 2.99792458e8/1.0e5*rz*rz/Ez
+        return dVdzdOmega
 
     def get_r_delta_of_m_delta_at_z(self,delta,m_delta,z,params_values_dict=None):
         if params_values_dict:
@@ -601,6 +611,39 @@ class Class_szfast(object):
         self.cszfast_pk_grid_dsigma2 = dvar
         self.cszfast_pk_grid_dsigma2_flat = dvar.flatten()
  
+        return 0
+    
+    def calculate_vrms2(self,**params_values_dict):
+        # k = self.cszfast_pk_grid_k
+        k = np.geomspace(1e-5,1e1,1000)
+        
+        
+        # z = self.cszfast_pk_grid_z
+        z = np.linspace(0,3,800)
+
+        # P = self.cszfast_pk_grid_pk
+        P = np.asarray([self.get_pkl_at_k_and_z(k,zpx) for zpx in z])
+
+        a = 1/(1+z)
+        H = self.get_hubble(z)
+        z0 = 0.
+
+        k0 = 1e-2
+        pks = self.get_pkl_at_k_and_z(k0,z)
+        pks0 = self.get_pkl_at_k_and_z(k0,z0)
+        D = np.sqrt(pks/pks0)
+
+        f = -np.gradient(np.log(D), np.log(1 + z))
+
+        W = f*a*H
+        x = np.log(k)
+        I = 1/3*W[:,None]**2*P*k/2/np.pi**2
+
+
+        vrms2 = scipy.integrate.simpson(I,x=x,axis=1)
+
+
+        self.cszfast_3c2vrms2 = np.interp(self.cszfast_pk_grid_z,z,np.log(vrms2*3.*Const._c_**2*1e-6))
         return 0
 
 
