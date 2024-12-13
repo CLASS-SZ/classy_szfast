@@ -13,12 +13,16 @@ dependencies = [
     "numpy>=1.19.0",
     "Cython>=0.29.21",
     "tensorflow",
-    "mcfit",
-    "get_cosmopower_emus==0.0.15",
-    "class_sz_data",
+    "mcfit>=0.0.22",
+    "get_cosmopower_emus>=0.0.15",
+    "class_sz_data>=0.0.13",
     "cosmopower-jax"
 ]
 
 [project.urls]
 Homepage = "https://github.com/CLASS-SZ"
 GitHub = "https://github.com/CLASS-SZ"
+
+
+[tool.setuptools.packages.find]
+where = ["."]
