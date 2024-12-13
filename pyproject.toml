@@ -14,7 +14,7 @@ dependencies = [
     "Cython>=0.29.21",
     "tensorflow",
     "mcfit",
-    "get_cosmopower_emus",
+    "get_cosmopower_emus==0.0.15",
     "class_sz_data",
     "cosmopower-jax"
 ]
