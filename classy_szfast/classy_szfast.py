@@ -1,5 +1,5 @@
 from .utils import *
-from .utils import Const
+from .utils import Const, jax_gradient
 from .config import *
 import numpy as np
 from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list
@@ -133,7 +133,7 @@ class Class_szfast(object):
             self.geomspace = jnp.geomspace
             self.arange = jnp.arange
             self.zeros = jnp.zeros
-            self.gradient = jnp.gradient
+            self.gradient = jax_gradient
 
 
         else:
@@ -591,8 +591,8 @@ class Class_szfast(object):
 
             R, var[:,iz] = TophatVar(k, lowring=True)(P[:,iz], extrap=True)
 
-            # dvar[:,iz] = self.gradient(var[:,iz], R) ## old form
-            _, dvar[:,iz] = TophatVar(k, lowring=True, deriv=1)(P[:,iz]*k, extrap=True) # new form 
+            dvar[:,iz] = self.gradient(var[:,iz], R) ## old form with jax gradient from inigo zubeldia if needed. 
+            # _, dvar[:,iz] = TophatVar(k, lowring=True, deriv=1)(P[:,iz]*k, extrap=True) # new form doesnt seem to work accurately
 
         # dvar = dvar/(2.*np.sqrt(var))
         # print(dvar_grads/dvar)
