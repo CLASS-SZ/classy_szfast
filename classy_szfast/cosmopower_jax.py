@@ -7,6 +7,7 @@ from .suppress_warnings import suppress_warnings
 from .emulators_meta_data import *
 
 from cosmopower_jax.cosmopower_jax import CosmoPowerJAX as CPJ
+from jax.errors import TracerArrayConversionError
 
 
 cp_tt_nn_jax = {}
@@ -27,6 +28,32 @@ class CosmoPowerJAX_custom(CPJ):
         self.ten_to_predictions = True
         if 'ten_to_predictions' in kwargs.keys():
             self.ten_to_predictions = kwargs['ten_to_predictions']
+
+    def _dict_to_ordered_arr_np(self,
+                               input_dict,
+                               ):
+        """
+        Sort input parameters. Takend verbatim from CP 
+        (https://github.com/alessiospuriomancini/cosmopower/blob/main/cosmopower/cosmopower_NN.py#LL291C1-L308C73)
+
+        Parameters:
+            input_dict (dict [numpy.ndarray]):
+                input dict of (arrays of) parameters to be sorted
+
+        Returns:
+            numpy.ndarray:
+                parameters sorted according to desired order
+        """
+        if self.parameters is not None:
+            try:
+                return np.stack([input_dict[k] for k in self.parameters], axis=1)
+            except TracerArrayConversionError:
+                converted_dict = {k: jnp.array(v) if isinstance(v, list) else v for k, v in input_dict.items()}
+                return jnp.stack([converted_dict[k] for k in self.parameters], axis=1)
+
+        else:
+            return np.stack([input_dict[k] for k in input_dict], axis=1)
+
 
     def _predict(self, weights, hyper_params, param_train_mean, param_train_std,
                  feature_train_mean, feature_train_std, input_vec):
