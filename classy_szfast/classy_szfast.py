@@ -173,9 +173,16 @@ class Class_szfast(object):
             self.cp_pkl_fftlog_alphas_imag_nn = cp_pkl_fftlog_alphas_imag_nn
 
         self.cosmo_model = 'ede-v2'
+
         self.use_Amod = 0
         self.Amod = 0 
-
+        
+        self.use_pk_z_bins = 0
+        self.pk_z_bins_z1 = 0
+        self.pk_z_bins_z2 = 0
+        self.pk_z_bins_A0 = 0
+        self.pk_z_bins_A1 = 0
+        self.pk_z_bins_A2 = 0
         
 
         if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
@@ -222,6 +229,15 @@ class Class_szfast(object):
 
                 self.use_Amod = v
                 self.Amod  = params_settings['Amod']
+
+            if k == 'use_pk_z_bins':
+                self.use_pk_z_bins = v
+                self.pk_z_bins_z1 = params_settings['pk_z_bins_z1']
+                self.pk_z_bins_z2 = params_settings['pk_z_bins_z2']
+                self.pk_z_bins_A0 = params_settings['pk_z_bins_A0']
+                self.pk_z_bins_A1 = params_settings['pk_z_bins_A1']
+                self.pk_z_bins_A2 = params_settings['pk_z_bins_A2']
+
 
 
 
@@ -535,6 +551,19 @@ class Class_szfast(object):
                 pk_ae  = pkl_p + self.Amod*(pknl_p-pkl_p)
                 predicted_pk_spectrum_z.append(pk_ae)
 
+        elif self.use_pk_z_bins:
+            # print('>>> using pk_z_bins')
+            for zp in z_arr:
+                params_dict_pp = params_dict.copy()
+                params_dict_pp['z_pk_save_nonclass'] = [zp]
+                pkl_p = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0]
+                if zp < self.pk_z_bins_z1:
+                    pklp = self.pk_z_bins_A0*pkl_p
+                elif zp < self.pk_z_bins_z2:
+                    pklp = self.pk_z_bins_A1*pkl_p
+                else:
+                    pklp = self.pk_z_bins_A2*pkl_p
+                predicted_pk_spectrum_z.append(pklp)
         else:
 
             for zp in z_arr:
