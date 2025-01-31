@@ -88,7 +88,7 @@ class Class_szfast(object):
         self.cp_ee_nn = cp_ee_nn
         self.cp_pp_nn = cp_pp_nn
         self.cp_pknl_nn  = cp_pknl_nn
-        self.cp_der_nn = cp_der_nn
+
        
         self.cp_lmax = cp_l_max_scalars
 
@@ -120,6 +120,7 @@ class Class_szfast(object):
             self.cp_h_nn = cp_h_nn_jax
             self.cp_da_nn = cp_da_nn_jax
             self.cp_pkl_nn = cp_pkl_nn_jax
+            self.cp_der_nn = cp_der_nn_jax
 
             self.pi = jnp.pi
             self.transpose = jnp.transpose
@@ -140,7 +141,7 @@ class Class_szfast(object):
             self.cp_h_nn = cp_h_nn
             self.cp_da_nn = cp_da_nn
             self.cp_pkl_nn = cp_pkl_nn
-
+            self.cp_der_nn = cp_der_nn
             self.pi = np.pi
             self.transpose = np.transpose
             self.pow = np.power
@@ -320,6 +321,11 @@ class Class_szfast(object):
         rz = dA*(1.+z)*params_values['h']
         dVdzdOmega = 2.99792458e8/1.0e5*rz*rz/Ez
         return dVdzdOmega
+    
+    def get_sigma8_and_der(self,params_values_dict=None):
+        params_values = self.get_all_relevant_params(params_values_dict)
+        self.calculate_sigma8_and_der(**params_values)
+        return self.cp_predicted_der
 
     def get_r_delta_of_m_delta_at_z(self,delta,m_delta,z,params_values_dict=None):
         if params_values_dict:
@@ -692,7 +698,10 @@ class Class_szfast(object):
             if isinstance(params_dict['m_ncdm'][0],str): 
                 params_dict['m_ncdm'] =  [float(params_dict['m_ncdm'][0].split(',')[0])]
 
-        self.cp_predicted_der = self.cp_der_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
+        if self.jax_mode:
+            self.cp_predicted_der = self.cp_der_nn[self.cosmo_model].predict(params_dict)
+        else:
+            self.cp_predicted_der = self.cp_der_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
         self.sigma8 = self.cp_predicted_der[1]
         self.Neff = self.cp_predicted_der[4]
         return 0
