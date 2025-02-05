@@ -254,6 +254,16 @@ class classy_sz(classy):
                         method="cl_galn_IA", # name of the method in classy.pyx
                         args_names=[],
                         args=[])
+
+        if "cl_lens_lens" in requirements:
+                # make sure cobaya still runs as it does for standard classy
+                requirements.pop("cl_lens_lens")
+                # specify the method to collect the new observable
+                self.collectors["cl_lens_lens"] = Collector(
+                        method="cl_kk", # name of the method in classy.pyx
+                        args_names=[],
+                        args=[])
+            
         super().must_provide(**requirements)
 
 
@@ -389,6 +399,11 @@ class classy_sz(classy):
         cls = {}
         cls = deepcopy(self._current_state["cl_cib_kappa"])
         return cls
+
+    def get_cl_lens_lens(self):
+            cls = {}
+            cls = deepcopy(self._current_state["cl_lens_lens"])
+            return cls
 
     # IMPORTANT: this method is imported from cobaya and modified to accomodate the emulators
     def calculate(self, state, want_derived=True, **params_values_dict):
