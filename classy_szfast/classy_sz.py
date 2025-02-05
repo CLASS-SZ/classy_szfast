@@ -255,6 +255,7 @@ class classy_sz(classy):
                         args_names=[],
                         args=[])
 
+        ## added lensing fwith limber integral
         if "cl_lens_lens" in requirements:
                 # make sure cobaya still runs as it does for standard classy
                 requirements.pop("cl_lens_lens")
