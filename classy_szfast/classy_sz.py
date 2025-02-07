@@ -24,6 +24,19 @@ class classy_sz(classy):
                 self.log, "Could not find CLASS_SZ. Check error message above.")
         
         from classy_sz import Class, CosmoSevereError, CosmoComputationError
+
+        # import classy_sz
+        # import os
+        # path_to_data = os.getenv("PATH_TO_CLASS_SZ_DATA")
+        # print(path_to_data)
+
+        # print(classy_sz.__file__)
+
+        # import classy_szfast
+        # print(classy_szfast.__file__)
+        # import sys; sys.exit()
+        # print(sys.path)
+
         
         global CosmoComputationError, CosmoSevereError
 
@@ -447,10 +460,32 @@ class classy_sz(classy):
                 else:
 
                     start_time = time.time()
+                    # self.classy = Class()
+                    # print('pars in classy',self.classy.pars)
                     self.classy.compute_class_szfast(likelihood_mode=True)
                     end_time = time.time()
                     # self.log.info("Execution time of class_szfast: {:.5f} seconds".format(end_time - start_time))
-                    # print('pars in classy',self.classy.pars)
+                    
+                    # some debug printouts
+                    # cl_kk_hm = self.classy.cl_kk
+                    # ell = np.asarray(cl_kk_hm()['ell'])
+                    # fac = ell*(ell+1.)/2./np.pi
+                    # cl_kk_hf = np.asarray(cl_kk_hm()['hf'])/fac
+                    # print('cl_kk_hf',cl_kk_hf[0])
+                    # print('ell',ell[0])
+                    # print('pp',self.classy.lensed_cl()['pp'][2])
+                    # print('angular_distance',self.classy.angular_distance(0.1))
+                    # print('Omega_Lambda',self.classy.Omega_Lambda())
+                    # print('Hubble',self.classy.Hubble(0))
+                    # print('Omega_m',self.classy.Omega_m())
+                    # print('Neff',self.classy.Neff())
+                    # print('m_ncdm_tot',self.classy.get_current_derived_parameters(['m_ncdm_tot']))
+                    # print('Neff',self.classy.get_current_derived_parameters(['Neff']))
+                    # print('Omega_m',self.classy.get_current_derived_parameters(['Omega_m']))
+                    # print('h',self.classy.get_current_derived_parameters(['h']))
+                    # print('m_ncdm_in_eV',self.classy.get_current_derived_parameters(['m_ncdm_in_eV']))
+                    # print("\n\n-----------------------------------\n\n")
+                    # import sys; sys.exit()
             else:
 
                 self.classy.compute()
@@ -545,6 +580,21 @@ class classy_sz(classy):
 
 
         state["derived_extra"] = deepcopy(d_extra)
+
+
+    def set(self, params_values_dict):
+        # If no output requested, remove arguments that produce an error
+        # (e.g. complaints if halofit requested but no Cl's computed.) ?????
+        # Needed for facilitating post-processing
+        if not self.extra_args["output"]:
+            for k in ["non_linear"]:
+                self.extra_args.pop(k, None)
+        # Prepare parameters to be passed: this-iteration + extra
+        args = {self.translate_param(p): v for p, v in params_values_dict.items()}
+        args.update(self.extra_args)
+        # Generate and save
+        # print("Setting parameters: %r", args)
+        self.classy.set(**args)
 
 
 
