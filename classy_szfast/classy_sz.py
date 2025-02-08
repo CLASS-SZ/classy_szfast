@@ -515,8 +515,8 @@ class classy_sz(classy):
         for product, collector in self.collectors.items():
             # print(product,collector)
             # Special case: sigma8 needs H0, which cannot be known beforehand:
-            if "sigma8" in self.collectors:
-                self.collectors["sigma8"].args[0] = 8 / self.classy.h()
+            # if "sigma8" in self.collectors:
+            #     self.collectors["sigma8"].args[0] = 8 / self.classy.h()
             method = getattr(self.classy, collector.method)
             arg_array = self.collectors[product].arg_array
             if isinstance(arg_array, int):
