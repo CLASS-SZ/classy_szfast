@@ -1,5 +1,7 @@
 from .config import path_to_class_sz_data
 import numpy as np
+import jax
+jax.config.update("jax_enable_x64", False)
 import jax.numpy as jnp
 from .restore_nn import Restore_NN
 from .restore_nn import Restore_PCAplusNN

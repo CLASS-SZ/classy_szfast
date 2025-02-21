@@ -7,6 +7,9 @@ import os
 import numpy as np
 import time
 
+import warnings
+
+
 class classy_sz(classy):
 
     use_class_sz_fast_mode = 1 # this is passed in the yaml file
@@ -22,7 +25,14 @@ class classy_sz(classy):
         if not self.classy_module:
             raise NotInstalledError(
                 self.log, "Could not find CLASS_SZ. Check error message above.")
-        
+
+        # Ignore the specific UserWarning from mcfit about using backend='jax'
+        warnings.filterwarnings(
+            "ignore",
+            message="use backend='jax' if desired",
+            category=UserWarning
+        )
+
         from classy_sz import Class, CosmoSevereError, CosmoComputationError
 
         # import classy_sz

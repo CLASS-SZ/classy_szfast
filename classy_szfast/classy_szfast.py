@@ -12,6 +12,8 @@ from multiprocessing import Process
 from mcfit import TophatVar
 from scipy.interpolate import CubicSpline
 import pickle
+import jax 
+jax.config.update("jax_enable_x64", False)
 import jax.numpy as jnp
 import jax.scipy as jscipy
 
@@ -173,7 +175,7 @@ class Class_szfast(object):
             self.cp_pkl_fftlog_alphas_real_nn  = cp_pkl_fftlog_alphas_real_nn
             self.cp_pkl_fftlog_alphas_imag_nn = cp_pkl_fftlog_alphas_imag_nn
 
-        self.cosmo_model = 'ede-v2'
+        self.cosmo_model = 'lcdm'
 
         self.use_Amod = 0
         self.Amod = 0 
