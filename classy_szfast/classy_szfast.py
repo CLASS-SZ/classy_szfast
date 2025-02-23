@@ -13,7 +13,7 @@ from mcfit import TophatVar
 from scipy.interpolate import CubicSpline
 import pickle
 import jax 
-jax.config.update("jax_enable_x64", False)
+jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 import jax.scipy as jscipy
 
@@ -131,7 +131,16 @@ class Class_szfast(object):
             self.pow = jnp.power
 
             self.sigma_B = 2. * self.pow(self.pi,5) * self.pow(Const._k_B_,4) / 15. / self.pow(Const._h_P_,3) / self.pow(Const._c_,2)
-
+            # print('sigma_B',self.sigma_B)
+            # print('pi',self.pi)
+            # print('k_B',Const._k_B_)
+            # print('h_P',Const._h_P_)
+            # print('c',Const._c_)
+            # print('pow(pi,5)',self.pow(self.pi,5)) 
+            # print('pow(k_B,4)',self.pow(Const._k_B_,4)) ## this doesnt work if float64 is disabled
+            # print('15.',15.)
+            # print('pow(h_P,3)',self.pow(Const._h_P_,3)) ## this doesnt work if float64 is disabled
+            # print('pow(c,2)',self.pow(Const._c_,2))
             self.linspace = jnp.linspace
             self.geomspace = jnp.geomspace
             self.arange = jnp.arange

@@ -14,7 +14,7 @@ from numpy import linalg as LA
 import mcfit
 from mcfit import P2xi
 import jax
-jax.config.update("jax_enable_x64", False)
+jax.config.update("jax_enable_x64", True)
 import jax.numpy as jnp
 # import cosmopower
 # import classy_sz as csz
