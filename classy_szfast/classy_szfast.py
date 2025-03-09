@@ -715,6 +715,8 @@ class Class_szfast(object):
             self.cp_predicted_der = self.cp_der_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
         self.sigma8 = self.cp_predicted_der[1]
         self.Neff = self.cp_predicted_der[4]
+        self.ra_star = self.cp_predicted_der[12]
+
         return 0
 
 
@@ -839,7 +841,7 @@ class Class_szfast(object):
         pk_re = self.transpose(pk_re)
 
         
-        return pk_re, k_arr
+        return pk_re.flatten(), k_arr
     
 
     def calculate_pknl_at_z(self,
@@ -887,7 +889,7 @@ class Class_szfast(object):
         pk_re = self.transpose(pk_re)
 
         
-        return pk_re, k_arr
+        return pk_re.flatten(), k_arr
     
 
     def calculate_hubble(self,
