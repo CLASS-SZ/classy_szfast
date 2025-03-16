@@ -744,7 +744,7 @@ class Class_szfast(object):
                                                     kind='linear',
                                                     axis=-1,
                                                     copy=True,
-                                                    bounds_error=None,
+                                                    bounds_error=False,
                                                     fill_value=np.nan,
                                                     assume_sorted=False)
 
@@ -935,8 +935,8 @@ class Class_szfast(object):
                                                 kind='linear',
                                                 axis=-1,
                                                 copy=True,
-                                                bounds_error=None,
-                                                fill_value=np.nan,
+                                                bounds_error=False,
+                                                fill_value=0.,
                                                 assume_sorted=False)
 
     def calculate_chi(self,
@@ -981,15 +981,15 @@ class Class_szfast(object):
             
                 self.cp_predicted_da  = self.cp_da_nn[self.cosmo_model].predictions_np(params_dict)[0]
             
-
+            
             self.chi_interp = scipy.interpolate.interp1d(
                                                         self.cp_z_interp,
                                                         self.cp_predicted_da*(1.+self.cp_z_interp),
                                                         kind='linear',
                                                         axis=-1,
                                                         copy=True,
-                                                        bounds_error=None,
-                                                        fill_value=np.nan,
+                                                        bounds_error=False,
+                                                        fill_value=0,
                                                         assume_sorted=False)
 
     def get_cmb_cls(self,ell_factor=True,Tcmb_uk = Tcmb_uk):
