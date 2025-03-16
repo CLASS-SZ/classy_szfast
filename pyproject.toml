@@ -16,7 +16,7 @@ dependencies = [
     "mcfit>=0.0.22",
     "get_cosmopower_emus>=0.0.15",
     "class_sz_data>=0.0.13",
-    "cosmopower-jax"
+    "cosmopower_jax==0.5.5"
 ]
 
 [project.urls]

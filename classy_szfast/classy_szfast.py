@@ -13,7 +13,7 @@ from mcfit import TophatVar
 from scipy.interpolate import CubicSpline
 import pickle
 import jax 
-jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", False)
 import jax.numpy as jnp
 import jax.scipy as jscipy
 
