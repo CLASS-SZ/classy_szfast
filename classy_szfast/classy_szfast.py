@@ -264,7 +264,9 @@ class Class_szfast(object):
             self.pk_power_fac= (dls)**-1
 
 
-        self.cp_z_interp = self.linspace(0.,20.,5000)
+        
+        self.cp_z_interp_zmax = 20.
+        self.cp_z_interp = self.linspace(0.,self.cp_z_interp_zmax,5000)
 
         self.csz_base = None
 

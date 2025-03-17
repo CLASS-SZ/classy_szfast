@@ -60,7 +60,7 @@ z_recombination_max = 1500
 # ------------------
 # Light speed
 class Const:
-    c_km_s = 299792.458  # speed of light
+    c_km_s = 299792.458  # speed of light in km/s
     h_J_s = 6.626070040e-34  # Planck's constant
     kB_J_K = 1.38064852e-23  # Boltzmann constant
 
