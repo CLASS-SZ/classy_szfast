@@ -122,6 +122,7 @@ class Class_szfast(object):
             self.cp_h_nn = cp_h_nn_jax
             self.cp_da_nn = cp_da_nn_jax
             self.cp_pkl_nn = cp_pkl_nn_jax
+            self.cp_pknl_nn = cp_pknl_nn_jax
             self.cp_der_nn = cp_der_nn_jax
 
             self.pi = jnp.pi
@@ -153,6 +154,7 @@ class Class_szfast(object):
             self.cp_h_nn = cp_h_nn
             self.cp_da_nn = cp_da_nn
             self.cp_pkl_nn = cp_pkl_nn
+            self.cp_pknl_nn = cp_pknl_nn
             self.cp_der_nn = cp_der_nn
             self.pi = np.pi
             self.transpose = np.transpose
@@ -779,7 +781,10 @@ class Class_szfast(object):
         for zp in z_arr:
             params_dict_pp = params_dict.copy()
             params_dict_pp['z_pk_save_nonclass'] = [zp]
-            predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
+            if self.jax_mode:
+                predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predict(params_dict_pp))
+            else:
+                predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
@@ -790,7 +795,10 @@ class Class_szfast(object):
         pk_re = self.transpose(pk_re)
 
 
-        self.pknl_interp = PowerSpectrumInterpolator(z_arr,k_arr,self.log(pk_re).T,logP=True)
+        if self.jax_mode:
+            self.pknl_interp = None
+        else:
+            self.pknl_interp = PowerSpectrumInterpolator(z_arr,k_arr,self.log(pk_re).T,logP=True)
 
 
         self.cszfast_pk_grid_pknl = pk_re
@@ -877,12 +885,14 @@ class Class_szfast(object):
 
         predicted_pk_spectrum_z = []
 
-        z_asked = z_asked
         params_dict_pp = params_dict.copy()
         update_params_with_defaults(params_dict_pp, self.emulator_dict[self.cosmo_model]['default'])
 
         params_dict_pp['z_pk_save_nonclass'] = [z_asked]
-        predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
+        if self.jax_mode:
+            predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predict(params_dict_pp))
+        else:
+            predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
