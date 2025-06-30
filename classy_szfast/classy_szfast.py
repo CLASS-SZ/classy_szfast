@@ -176,16 +176,17 @@ class Class_szfast(object):
         self.cosmo_model = 'ede-v2'
 
         self.use_Amod = 0
-        self.Amod = 0 
-        
-        self.use_pk_z_bins = 0
-        self.use_pknl_z_bins = 0
+        self.Amod = 0
+
+        ### CEV ###
+        self.use_pk_z_bins = 0 # Turn on A(z) parametrization from Embil-Villagra et al. 2025
+        self.use_pknl_z_bins = 0 # Turn on non-linear correction for A(z) from Embil-Villagra et al. 2025
         self.pk_z_bins_z1 = 0
         self.pk_z_bins_z2 = 0
         self.pk_z_bins_A0 = 0
         self.pk_z_bins_A1 = 0
         self.pk_z_bins_A2 = 0
-        
+        ############
 
         if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
 
@@ -232,6 +233,7 @@ class Class_szfast(object):
                 self.use_Amod = v
                 self.Amod  = params_settings['Amod']
 
+            ### CEV ###
             if k == 'use_pk_z_bins':
                 self.use_pk_z_bins = v
                 self.pk_z_bins_z1 = params_settings['pk_z_bins_z1']
@@ -247,7 +249,7 @@ class Class_szfast(object):
                 self.pk_z_bins_A0 = params_settings['pk_z_bins_A0']
                 self.pk_z_bins_A1 = params_settings['pk_z_bins_A1']
                 self.pk_z_bins_A2 = params_settings['pk_z_bins_A2']
-
+            ############
 
 
 
@@ -533,12 +535,10 @@ class Class_szfast(object):
         z_arr = self.cszfast_pk_grid_z
         k_arr = self.cszfast_pk_grid_k 
 
-        # print(">>> z_arr:",z_arr)
-        # print(">>> k_arr:",k_arr)
-        # import sys
-        
-        if self.use_pk_z_bins == 1 and self.use_pknl_z_bins == 1:
-            raise ValueError("Both 'use_pk_z_bins' and 'use_pknl_z_bins' cannot be set to 1 simultaneously.")
+        ### CEV ###
+        if self.use_pk_z_bins == 1 and self.use_Amod == 1:
+            raise ValueError("Both 'use_pk_z_bins' and 'use_Amod' cannot be used simultaneously.")
+        ###########
 
         params_values = params_values_dict.copy()
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
@@ -567,6 +567,7 @@ class Class_szfast(object):
                 pk_ae  = pkl_p + self.Amod*(pknl_p-pkl_p)
                 predicted_pk_spectrum_z.append(pk_ae)
 
+        ### CEV ###
         elif self.use_pk_z_bins:
             for zp in z_arr:
                 params_dict_pp = params_dict.copy()
@@ -579,6 +580,8 @@ class Class_szfast(object):
                 else:
                     pklp = np.log10(self.pk_z_bins_A2)+pkl_p
                 predicted_pk_spectrum_z.append(pklp)
+        ############
+
         else:
 
             for zp in z_arr:
@@ -590,10 +593,7 @@ class Class_szfast(object):
                 else:
                     predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
 
-                # if abs(zp-0.5) < 0.01:
-                #   print(">>> predicted_pk_spectrum_z:",predicted_pk_spectrum_z[-1])
-                #   import pprint
-                #   pprint.pprint(params_dict_pp)
+
        
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
@@ -602,9 +602,6 @@ class Class_szfast(object):
         pk_re = pk*self.pk_power_fac
         pk_re = self.transpose(pk_re)
 
-        # print(">>> pk_re:",pk_re)
-        # import sys
-        # sys.exit(0)
 
         if self.jax_mode:
             self.pkl_interp = None
@@ -732,7 +729,6 @@ class Class_szfast(object):
 
 
         s8z  = self.cp_s8_nn[self.cosmo_model].predictions_np(params_dict)
-        # print(self.s8z)
         self.s8z_interp = scipy.interpolate.interp1d(
                                                     self.linspace(0.,20.,5000),
                                                     s8z[0],
@@ -755,9 +751,6 @@ class Class_szfast(object):
 
         params_values = params_values_dict.copy()
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
-        
-        if self.use_pk_z_bins == 1 and self.use_pknl_z_bins == 1:
-            raise ValueError("Both 'use_pk_z_bins' and 'use_pknl_z_bins' cannot be set to 1 simultaneously.")
 
         params_dict = {}
         for k,v in zip(params_values.keys(),params_values.values()):
@@ -770,14 +763,14 @@ class Class_szfast(object):
 
         predicted_pk_spectrum_z = []
         
-        ############################## ADDED ############################################################
+        ### CEV ###
         if self.use_pknl_z_bins:
             predicted_pknl_spectrum_z = []
             for zp in z_arr:
                 params_dict_pp = params_dict.copy()
                 params_dict_pp['z_pk_save_nonclass'] = [zp]
-                pkl_p = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0]
-                pknl_p = self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0]
+                pkl_p = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0] # Linear power spectrum
+                pknl_p = self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0] # Non-linear power spectrum
                 
                 if zp < self.pk_z_bins_z1:
                     pklp = (self.pk_z_bins_A0-1) * 10.**pkl_p
@@ -788,7 +781,8 @@ class Class_szfast(object):
                     
                 predicted_pk_spectrum_z.append(pklp)
                 predicted_pknl_spectrum_z.append(pknl_p)
-        ##########################################################################################
+        ##########
+
         else:
             for zp in z_arr:
                 params_dict_pp = params_dict.copy()
@@ -797,14 +791,14 @@ class Class_szfast(object):
 
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
-        ################################### ADDED ############################################
+        ### CEV ###
         if self.use_pknl_z_bins:
             predicted_pknl_spectrum_z = self.asarray(predicted_pknl_spectrum_z)
             pk = predicted_pk_spectrum + 10.**predicted_pknl_spectrum_z
 
         else:
             pk = 10.**predicted_pk_spectrum
-        ##########################################################################################
+        ##########
         
         pk_re = pk*self.pk_power_fac
         pk_re = self.transpose(pk_re)
@@ -1148,6 +1142,8 @@ class Class_szfast(object):
 
 
     def get_sigma8_at_z(self,z):
+        s8z  = self.cp_s8_nn[self.cosmo_model].predictions_np(params_dict)
+        print(s8z)
         return self.s8z_interp(z)
 
 

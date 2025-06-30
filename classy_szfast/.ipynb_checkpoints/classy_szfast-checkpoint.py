@@ -533,12 +533,16 @@ class Class_szfast(object):
         z_arr = self.cszfast_pk_grid_z
         k_arr = self.cszfast_pk_grid_k 
 
+#         print("calculate_pkl")
         # print(">>> z_arr:",z_arr)
         # print(">>> k_arr:",k_arr)
         # import sys
         
-        if self.use_pk_z_bins == 1 and self.use_pknl_z_bins == 1:
-            raise ValueError("Both 'use_pk_z_bins' and 'use_pknl_z_bins' cannot be set to 1 simultaneously.")
+#         if self.use_pk_z_bins == 1 and self.use_pknl_z_bins == 1:
+#             raise ValueError("Both 'use_pk_z_bins' and 'use_pknl_z_bins' cannot be set to 1 simultaneously.")
+        
+#         if self.use_pknl_z_bins == 1:
+#             self.use_pk_z_bins == 1
 
         params_values = params_values_dict.copy()
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
@@ -568,24 +572,21 @@ class Class_szfast(object):
                 predicted_pk_spectrum_z.append(pk_ae)
 
         elif self.use_pk_z_bins:
-            
             for zp in z_arr:
-                
                 params_dict_pp = params_dict.copy()
                 params_dict_pp['z_pk_save_nonclass'] = [zp]
                 pkl_p = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0]
-                
                 if zp < self.pk_z_bins_z1:
                     pklp = np.log10(self.pk_z_bins_A0)+pkl_p
                 elif zp < self.pk_z_bins_z2:
                     pklp = np.log10(self.pk_z_bins_A1)+pkl_p
                 else:
                     pklp = np.log10(self.pk_z_bins_A2)+pkl_p
-                    
                 predicted_pk_spectrum_z.append(pklp)
-                
         else:
+
             for zp in z_arr:
+            
                 params_dict_pp = params_dict.copy()
                 params_dict_pp['z_pk_save_nonclass'] = [zp]
                 if self.jax_mode:
@@ -735,7 +736,7 @@ class Class_szfast(object):
 
 
         s8z  = self.cp_s8_nn[self.cosmo_model].predictions_np(params_dict)
-        # print(self.s8z)
+        print(s8z)
         self.s8z_interp = scipy.interpolate.interp1d(
                                                     self.linspace(0.,20.,5000),
                                                     s8z[0],
@@ -759,8 +760,8 @@ class Class_szfast(object):
         params_values = params_values_dict.copy()
         update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
         
-        if self.use_pk_z_bins == 1 and self.use_pknl_z_bins == 1:
-            raise ValueError("Both 'use_pk_z_bins' and 'use_pknl_z_bins' cannot be set to 1 simultaneously.")
+#         if self.use_pk_z_bins == 1 and self.use_pknl_z_bins == 1:
+#             raise ValueError("Both 'use_pk_z_bins' and 'use_pknl_z_bins' cannot be set to 1 simultaneously.")
 
         params_dict = {}
         for k,v in zip(params_values.keys(),params_values.values()):
@@ -1151,6 +1152,8 @@ class Class_szfast(object):
 
 
     def get_sigma8_at_z(self,z):
+        s8z  = self.cp_s8_nn[self.cosmo_model].predictions_np(params_dict)
+        print(s8z)
         return self.s8z_interp(z)
 
 
