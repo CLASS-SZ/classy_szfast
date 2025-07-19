@@ -84,7 +84,7 @@ class classy_sz(classy):
 
 
             self.classy.set(initial_parameters)
-            self.classy.compute_class_szfast(likelihood_mode=True)
+            self.classy.initialize_classy_szfast(likelihood_mode=True)
             self.log.info("cosmology part initialized!")
 
 
