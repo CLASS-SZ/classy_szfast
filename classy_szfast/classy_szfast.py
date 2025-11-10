@@ -670,13 +670,16 @@ class Class_szfast(object):
         
         
         # z = self.cszfast_pk_grid_z
-        z = np.linspace(0,3,800)
+        z = np.linspace(0,5,800)
 
         # P = self.cszfast_pk_grid_pk
         P = np.asarray([self.get_pkl_at_k_and_z(k,zpx) for zpx in z])
 
         a = 1/(1+z)
         H = self.get_hubble(z)
+        # print(">>> H0:",H[0])
+        # print(">>> z:",z[0])
+        # print(">>> pks:",P[30][10])
         z0 = 0.
 
         k0 = 1e-2
@@ -689,9 +692,13 @@ class Class_szfast(object):
         W = f*a*H
         x = np.log(k)
         I = 1/3*W[:,None]**2*P*k/2/np.pi**2
+        # print(">>> I:",I[0][0])
+        # print(">>> x:",x[0])
+        # print(">>> W:",W[0])
 
 
         vrms2 = scipy.integrate.simpson(I,x=x,axis=1)
+        # print(">>> vrms2:",vrms2[0])
 
 
         self.cszfast_3c2vrms2 = np.interp(self.cszfast_pk_grid_z,z,np.log(vrms2*3.*Const._c_**2*1e-6))
