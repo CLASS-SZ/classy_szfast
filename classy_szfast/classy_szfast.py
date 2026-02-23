@@ -588,20 +588,18 @@ class Class_szfast(object):
                 predicted_pk_spectrum_z.append(pklp)
         else:
 
-            for zp in z_arr:
-            
-                params_dict_pp = params_dict.copy()
-                params_dict_pp['z_pk_save_nonclass'] = [zp]
-                if self.jax_mode:
-                    predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predict(params_dict_pp))
-                else:
-                    predicted_pk_spectrum_z.append(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
+            # Batched: single forward pass for all redshifts
+            n_z = len(z_arr)
+            params_dict_batch = {}
+            for k_param, v_param in params_dict.items():
+                params_dict_batch[k_param] = v_param * n_z
+            params_dict_batch['z_pk_save_nonclass'] = [float(zp) for zp in z_arr]
 
-                # if abs(zp-0.5) < 0.01:
-                #   print(">>> predicted_pk_spectrum_z:",predicted_pk_spectrum_z[-1])
-                #   import pprint
-                #   pprint.pprint(params_dict_pp)
-       
+            if self.jax_mode:
+                predicted_pk_spectrum_z = self.cp_pkl_nn[self.cosmo_model].predict(params_dict_batch)
+            else:
+                predicted_pk_spectrum_z = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_batch)
+
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
 
@@ -783,15 +781,17 @@ class Class_szfast(object):
                 params_dict['m_ncdm'] =  [float(params_dict['m_ncdm'][0].split(',')[0])]
 
 
-        predicted_pk_spectrum_z = []
+        # Batched: single forward pass for all redshifts
+        n_z = len(z_arr)
+        params_dict_batch = {}
+        for k_param, v_param in params_dict.items():
+            params_dict_batch[k_param] = v_param * n_z
+        params_dict_batch['z_pk_save_nonclass'] = [float(zp) for zp in z_arr]
 
-        for zp in z_arr:
-            params_dict_pp = params_dict.copy()
-            params_dict_pp['z_pk_save_nonclass'] = [zp]
-            if self.jax_mode:
-                predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predict(params_dict_pp))
-            else:
-                predicted_pk_spectrum_z.append(self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0])
+        if self.jax_mode:
+            predicted_pk_spectrum_z = self.cp_pknl_nn[self.cosmo_model].predict(params_dict_batch)
+        else:
+            predicted_pk_spectrum_z = self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_batch)
 
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
