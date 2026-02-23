@@ -860,7 +860,67 @@ class Class_szfast(object):
 
         
         return pk_re.flatten(), k_arr
-    
+
+
+    def calculate_pkl_at_z_array(self,
+                                z_array,
+                                params_values_dict=None):
+        """Batched version of calculate_pkl_at_z.
+
+        Evaluates the linear matter power spectrum at multiple redshifts
+        in a single forward pass through the emulator network.
+
+        Parameters
+        ----------
+        z_array : array-like
+            1-D array of redshifts.
+        params_values_dict : dict, optional
+            Cosmological parameters. Uses stored params if not provided.
+
+        Returns
+        -------
+        pk_array : ndarray, shape (n_z, n_k)
+            Linear P(k) in (Mpc)^3 for each redshift.
+        k_arr : ndarray, shape (n_k,)
+            Wavenumber grid in 1/Mpc.
+        """
+        import numpy as _np
+        z_array = _np.atleast_1d(z_array)
+        n_z = len(z_array)
+
+        k_arr = self.cszfast_pk_grid_k
+
+        if params_values_dict:
+            params_values = params_values_dict.copy()
+        else:
+            params_values = self.params_for_emulators
+
+        update_params_with_defaults(params_values, self.emulator_dict[self.cosmo_model]['default'])
+
+        # Build batched params dict: each cosmological param repeated n_z times
+        params_dict = {}
+        for k, v in params_values.items():
+            params_dict[k] = [v] * n_z
+
+        if 'm_ncdm' in params_dict:
+            if isinstance(params_dict['m_ncdm'][0], str):
+                params_dict['m_ncdm'] = [float(params_dict['m_ncdm'][0].split(',')[0])] * n_z
+
+        params_dict['z_pk_save_nonclass'] = [float(z) for z in z_array]
+
+        # Single batched forward pass
+        if self.jax_mode:
+            predicted_pk_spectrum = self.cp_pkl_nn[self.cosmo_model].predict(params_dict)
+        else:
+            predicted_pk_spectrum = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict)
+
+        predicted_pk_spectrum = self.asarray(predicted_pk_spectrum)
+
+        pk = 10.**predicted_pk_spectrum
+        pk_re = pk * self.pk_power_fac  # (n_z, n_k), broadcasts
+
+        return pk_re, k_arr
+
 
     def calculate_pknl_at_z(self,
                            z_asked,

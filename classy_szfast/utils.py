@@ -4,7 +4,7 @@ import multiprocessing
 import time
 import functools
 import re
-from pkg_resources import resource_filename
+from importlib.resources import files as resource_files
 import os
 from scipy import optimize
 from scipy.integrate import quad
