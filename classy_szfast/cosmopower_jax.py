@@ -12,18 +12,6 @@ from cosmopower_jax.cosmopower_jax import CosmoPowerJAX as CPJ
 from jax.errors import TracerArrayConversionError
 
 
-cp_tt_nn_jax = {}
-cp_te_nn_jax = {}
-cp_ee_nn_jax = {}
-cp_pp_nn_jax = {}
-cp_pknl_nn_jax = {}
-cp_pkl_nn_jax = {}
-cp_der_nn_jax = {}
-cp_da_nn_jax = {}
-cp_h_nn_jax = {}
-cp_s8_nn_jax = {}
-
-
 class CosmoPowerJAX_custom(CPJ):
     def __init__(self, verbose=False, *args, **kwargs):
         super().__init__(verbose=verbose, *args, **kwargs)
@@ -35,7 +23,7 @@ class CosmoPowerJAX_custom(CPJ):
                                input_dict,
                                ):
         """
-        Sort input parameters. Takend verbatim from CP 
+        Sort input parameters. Takend verbatim from CP
         (https://github.com/alessiospuriomancini/cosmopower/blob/main/cosmopower/cosmopower_NN.py#LL291C1-L308C73)
 
         Parameters:
@@ -63,7 +51,7 @@ class CosmoPowerJAX_custom(CPJ):
         In its current form, it does not make use of high-level frameworks like
         FLAX et similia; rather, it simply loops over the network layers.
         In future work this can be improved, especially if speed is a problem.
-        
+
         Parameters
         ----------
         weights : array
@@ -80,12 +68,12 @@ class CosmoPowerJAX_custom(CPJ):
             The stored  standard deviation of the training features.
         input_vec : array of shape (n_samples, n_parameters) or (n_parameters)
             The cosmological parameters given as input to the network.
-            
+
         Returns
         -------
         predictions : array
             The prediction of the trained neural network.
-        """        
+        """
         act = []
         # Standardise
         layer_out = [(input_vec - param_train_mean)/param_train_std]
@@ -102,7 +90,7 @@ class CosmoPowerJAX_custom(CPJ):
         if self.probe == 'custom_log' or self.probe == 'custom_pca':
             # in original CP models, we assumed a full final bias vector...
             preds = jnp.dot(layer_out[-1], w.T) + b
-        else:   
+        else:
             # ... unlike in cpjax, where we used only a single bias vector
             preds = jnp.dot(layer_out[-1], w.T) + b[-1]
 
@@ -118,41 +106,65 @@ class CosmoPowerJAX_custom(CPJ):
         predictions = preds.squeeze()
         return predictions
 
-for mp in cosmo_model_list:
+
+def _load_jax_emulators_for_model(mp):
+    """Load all JAX emulator NNs for a single cosmological model."""
     folder, version = split_emulator_string(mp)
-    # print(folder, version)
-    path_to_emulators = path_to_class_sz_data + '/' + folder +'/'
-    
-    cp_tt_nn_jax[mp] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TT'])
-    
-    cp_te_nn_jax[mp] = Restore_PCAplusNN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
-    
+    path_to_emulators = path_to_class_sz_data + '/' + folder + '/'
+
+    loaded = {}
+    loaded['tt'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TT'])
+    loaded['te'] = Restore_PCAplusNN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
     with suppress_warnings():
-        cp_ee_nn_jax[mp] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['EE'])
-    
-    cp_pp_nn_jax[mp] = Restore_NN(restore_filename=path_to_emulators + 'PP/' + emulator_dict[mp]['PP'])
-    
-    # cp_pknl_nn_jax[mp] = Restore_NN(restore_filename=path_to_emulators + 'PK/' + emulator_dict[mp]['PKNL'])
+        loaded['ee'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['EE'])
+    loaded['pp'] = Restore_NN(restore_filename=path_to_emulators + 'PP/' + emulator_dict[mp]['PP'])
 
-    cp_pknl_nn_jax[mp] = CosmoPowerJAX_custom(probe='custom_log',filepath=path_to_emulators +'PK/' + emulator_dict[mp]['PKNL'] + '.npz')
-    cp_pknl_nn_jax[mp].ten_to_predictions = False
+    pknl = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'PK/' + emulator_dict[mp]['PKNL'] + '.npz')
+    pknl.ten_to_predictions = False
+    loaded['pknl'] = pknl
 
+    pkl = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'PK/' + emulator_dict[mp]['PKL'] + '.npz')
+    pkl.ten_to_predictions = False
+    loaded['pkl'] = pkl
 
-    cp_pkl_nn_jax[mp] = CosmoPowerJAX_custom(probe='custom_log',filepath=path_to_emulators +'PK/' + emulator_dict[mp]['PKL'] + '.npz')
-    cp_pkl_nn_jax[mp].ten_to_predictions = False
+    loaded['der'] = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'derived-parameters/' + emulator_dict[mp]['DER'] + '.npz')
 
-    cp_der_nn_jax[mp] = CosmoPowerJAX_custom(probe='custom_log',filepath=path_to_emulators + 'derived-parameters/' + emulator_dict[mp]['DER'] + '.npz')  
-    
-    cp_da_nn_jax[mp] = CosmoPowerJAX_custom(probe='custom_log',filepath=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['DAZ'] + '.npz')
+    da = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['DAZ'] + '.npz')
     if mp != 'ede-v2':
-        cp_da_nn_jax[mp].ten_to_predictions = False
-    # print(cp_da_nn_jax[mp].parameters)
-    # print(path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['HZ'])
-    # emulator_custom = CPJ(probe='custom_log',filepath=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['HZ'] + '.npz')
-    # print(emulator_custom.parameters)
-    # exit()
+        da.ten_to_predictions = False
+    loaded['da'] = da
 
-    cp_h_nn_jax[mp] = CosmoPowerJAX_custom(probe='custom_log',filepath=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['HZ'] + '.npz')
+    loaded['h'] = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['HZ'] + '.npz')
+    loaded['s8'] = Restore_NN(restore_filename=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['S8Z'])
 
-    cp_s8_nn_jax[mp] = Restore_NN(restore_filename=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['S8Z'])
-    
+    return loaded
+
+
+class _LazyJaxEmulatorDict(dict):
+    """Dict that loads JAX emulators for a cosmological model on first access."""
+
+    def __init__(self, kind):
+        super().__init__()
+        self._kind = kind
+
+    def __missing__(self, mp):
+        if mp not in cosmo_model_list:
+            raise KeyError(f"Unknown cosmological model: {mp}")
+        if mp not in _loaded_jax_cache:
+            _loaded_jax_cache[mp] = _load_jax_emulators_for_model(mp)
+        self[mp] = _loaded_jax_cache[mp][self._kind]
+        return self[mp]
+
+
+_loaded_jax_cache = {}
+
+cp_tt_nn_jax = _LazyJaxEmulatorDict('tt')
+cp_te_nn_jax = _LazyJaxEmulatorDict('te')
+cp_ee_nn_jax = _LazyJaxEmulatorDict('ee')
+cp_pp_nn_jax = _LazyJaxEmulatorDict('pp')
+cp_pknl_nn_jax = _LazyJaxEmulatorDict('pknl')
+cp_pkl_nn_jax = _LazyJaxEmulatorDict('pkl')
+cp_der_nn_jax = _LazyJaxEmulatorDict('der')
+cp_da_nn_jax = _LazyJaxEmulatorDict('da')
+cp_h_nn_jax = _LazyJaxEmulatorDict('h')
+cp_s8_nn_jax = _LazyJaxEmulatorDict('s8')
