@@ -190,14 +190,17 @@ class Class_szfast(object):
         self.cosmo_model = 'lcdm'
 
         self.use_Amod = 0
-        self.Amod = 0 
-        
+        self.Amod = 0
+
         self.use_pk_z_bins = 0
         self.pk_z_bins_z1 = 0
         self.pk_z_bins_z2 = 0
         self.pk_z_bins_A0 = 0
         self.pk_z_bins_A1 = 0
         self.pk_z_bins_A2 = 0
+
+        self.use_resnet_pkl = 0
+        self._resnet_pkl_emu = None
         
 
         if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
@@ -253,6 +256,11 @@ class Class_szfast(object):
                 self.pk_z_bins_A1 = params_settings['pk_z_bins_A1']
                 self.pk_z_bins_A2 = params_settings['pk_z_bins_A2']
 
+            if k == 'use_resnet_pkl':
+                self.use_resnet_pkl = v
+                if v:
+                    self._init_resnet_pkl(params_settings.get('resnet_pkl_path', None))
+
 
 
 
@@ -297,6 +305,29 @@ class Class_szfast(object):
                                                        self.cszfast_gas_pressure_xgrid_nx)
         
         self.params_for_emulators = {}
+
+
+    def _init_resnet_pkl(self, weights_path=None):
+        """Initialize the ResNet PKL emulator as alternative to cosmopower.
+
+        Only valid for cosmo_model='lcdm' with default neutrino/CMB parameters.
+        """
+        from .pk_emulator_numpy import PkEmulatorNumpy
+
+        if weights_path is None:
+            weights_path = path_to_class_sz_data + '/resnet_pkl/iteration6_resnet_pca_numpy.npz'
+
+        self._resnet_pkl_emu = PkEmulatorNumpy(weights_path)
+
+        # Build index mapping from resnet's 200-point k-grid to the full 500-point k-grid.
+        # The resnet k-grid is a subset of the cosmopower k-grid (every 2-3 points, up to k~10).
+        k_full = np.array(self.cszfast_pk_grid_k)
+        k_resnet = self._resnet_pkl_emu.k_grid
+        self._resnet_k_indices = np.array([np.argmin(np.abs(k_full - kc)) for kc in k_resnet])
+        # Beyond k~10 (the resnet range), we'll extrapolate using the cosmopower emulator
+        self._resnet_k_max = k_resnet[-1]
+
+        self.logger.info(f"ResNet PKL emulator loaded: {len(k_resnet)} k-points up to k={self._resnet_k_max:.1f}")
 
 
     def get_all_relevant_params(self,params_values_dict=None):
@@ -562,7 +593,45 @@ class Class_szfast(object):
 
         predicted_pk_spectrum_z = []
 
-        if self.use_Amod:
+        if self.use_resnet_pkl and self._resnet_pkl_emu is not None:
+
+            # ResNet path: outputs physical log10(P(k)) on its 200-point k-grid.
+            # For k beyond the resnet range, P(k) is set to 0.
+            n_z = len(z_arr)
+            n_k_full = len(k_arr)
+            resnet_params = {
+                'ln10^{10}A_s': [params_dict['ln10^{10}A_s'][0]] * n_z,
+                'n_s': [params_dict['n_s'][0]] * n_z,
+                'H0': [params_dict['H0'][0]] * n_z,
+                'omega_b': [params_dict['omega_b'][0]] * n_z,
+                'omega_cdm': [params_dict['omega_cdm'][0]] * n_z,
+                'z_pk_save_nonclass': [float(zp) for zp in z_arr],
+            }
+            log10pk_resnet = self._resnet_pkl_emu.predictions_np(resnet_params)  # (n_z, 200)
+
+            # Interpolate from resnet 200-point subgrid to full 500-point k-grid
+            # using log-log interpolation + power-law extrapolation beyond k~10
+            k_full = np.asarray(k_arr)
+            k_resnet = k_full[self._resnet_k_indices]
+            pk_full = np.empty((n_z, n_k_full))
+            for iz in range(n_z):
+                interp_fn = np.interp(
+                    np.log(k_full), np.log(k_resnet), log10pk_resnet[iz],
+                    left=log10pk_resnet[iz, 0],     # flat extrapolation at low k
+                    right=log10pk_resnet[iz, -1],    # placeholder for high k
+                )
+                # Power-law extrapolation for k > resnet range
+                mask_hi = k_full > k_resnet[-1]
+                if mask_hi.any():
+                    slope = (log10pk_resnet[iz, -1] - log10pk_resnet[iz, -2]) / \
+                            (np.log10(k_resnet[-1]) - np.log10(k_resnet[-2]))
+                    interp_fn[mask_hi] = log10pk_resnet[iz, -1] + \
+                        slope * (np.log10(k_full[mask_hi]) - np.log10(k_resnet[-1]))
+                pk_full[iz] = 10.**interp_fn
+
+            pk_re = pk_full.T  # (n_k, n_z)
+
+        elif self.use_Amod:
 
             for zp in z_arr:
 
@@ -600,22 +669,18 @@ class Class_szfast(object):
             else:
                 predicted_pk_spectrum_z = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_batch)
 
-        predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
+        if not (self.use_resnet_pkl and self._resnet_pkl_emu is not None):
+            predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
+            pk = 10.**predicted_pk_spectrum
 
-        pk = 10.**predicted_pk_spectrum
-
-        pk_re = pk*self.pk_power_fac
-        pk_re = self.transpose(pk_re)
-
-        # print(">>> pk_re:",pk_re)
-        # import sys
-        # sys.exit(0)
+            pk_re = pk*self.pk_power_fac
+            pk_re = self.transpose(pk_re)
 
         if self.jax_mode:
             self.pkl_interp = None
         else:
-            self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,self.log(pk_re).T,logP=True)
+            self.pkl_interp = PowerSpectrumInterpolator(z_arr,k_arr,self.log(np.maximum(pk_re, 1e-300)).T,logP=True)
 
         self.cszfast_pk_grid_pk = pk_re
         self.cszfast_pk_grid_pkl_flat = pk_re.flatten()
