@@ -85,16 +85,31 @@ PREFAC_Y_E = _SIGMA_T_CGS / M_E_C2 * MPC_TO_CM
 # Battaglia 2012 gNFW profile parameters
 # ===================================================================
 
-def _b12_params(M200c, z):
+_B12_DEFAULTS = {
+    'P0_A': 18.1,   'P0_am': 0.154,    'P0_az': -0.758,
+    'xc_A': 0.497,  'xc_am': -0.00865, 'xc_az': 0.731,
+    'beta_A': 4.35,  'beta_am': 0.0393,  'beta_az': 0.415,
+}
+
+
+def _b12_params(M200c, z, profile_params=None):
     """Battaglia 2012 best-fit gNFW parameters.
 
     Parameters: M200c in M_sun, z scalar or array.
+    profile_params: dict overriding fitting coefficients, or None.
     Returns (P0, xc, beta) broadcast-compatible.
     """
+    pp = profile_params or {}
     m14 = M200c / 1e14
-    P0   = 18.1  * m14 ** 0.154    * (1.0 + z) ** (-0.758)
-    xc   = 0.497 * m14 ** (-0.00865) * (1.0 + z) ** 0.731
-    beta = 4.35  * m14 ** 0.0393   * (1.0 + z) ** 0.415
+    P0   = (pp.get('P0_A', _B12_DEFAULTS['P0_A'])
+            * m14 ** pp.get('P0_am', _B12_DEFAULTS['P0_am'])
+            * (1.0 + z) ** pp.get('P0_az', _B12_DEFAULTS['P0_az']))
+    xc   = (pp.get('xc_A', _B12_DEFAULTS['xc_A'])
+            * m14 ** pp.get('xc_am', _B12_DEFAULTS['xc_am'])
+            * (1.0 + z) ** pp.get('xc_az', _B12_DEFAULTS['xc_az']))
+    beta = (pp.get('beta_A', _B12_DEFAULTS['beta_A'])
+            * m14 ** pp.get('beta_am', _B12_DEFAULTS['beta_am'])
+            * (1.0 + z) ** pp.get('beta_az', _B12_DEFAULTS['beta_az']))
     return P0, xc, beta
 
 
@@ -206,7 +221,8 @@ def cl_yy_1h_2h(ell: jax.Array,
                 cg: CosmoGrids,
                 hg: HaloGrids,
                 params: dict,
-                profile: str = 'battaglia12') -> tuple[jax.Array, jax.Array]:
+                profile: str = 'battaglia12',
+                profile_params: dict | None = None) -> tuple[jax.Array, jax.Array]:
     """Compute C_ell^yy (1-halo and 2-halo terms).
 
     Parameters
@@ -221,6 +237,11 @@ def cl_yy_1h_2h(ell: jax.Array,
         Cosmological parameters (needs ``omega_b``, ``omega_cdm``, ``H0``).
     profile : str
         ``'battaglia12'`` (default) or ``'arnaud10'``.
+    profile_params : dict, optional
+        Override Arnaud 2010 profile parameters.  Recognised keys:
+        ``P0``, ``c500``, ``gamma``, ``alpha``, ``beta``.
+        When ``gamma``, ``alpha``, or ``beta`` differ from their
+        defaults the FT lookup table is recomputed inline (~0.5 ms).
 
     Returns
     -------
@@ -242,6 +263,26 @@ def cl_yy_1h_2h(ell: jax.Array,
 
     # ── y_ell computation ────────────────────────────────────────────────
     if profile == 'arnaud10':
+        # Extract profile parameters (fall back to module defaults)
+        P0    = profile_params.get('P0', _A10_P0) if profile_params else _A10_P0
+        c500  = profile_params.get('c500', _A10_C500) if profile_params else _A10_C500
+        gamma = profile_params.get('gamma', _A10_GAMMA) if profile_params else _A10_GAMMA
+        alpha = profile_params.get('alpha', _A10_ALPHA) if profile_params else _A10_ALPHA
+        beta  = profile_params.get('beta', _A10_BETA) if profile_params else _A10_BETA
+
+        # Recompute FT table when shape params differ from defaults
+        shape_params_vary = (profile_params is not None
+                             and any(k in profile_params
+                                     for k in ('gamma', 'alpha', 'beta')))
+        if shape_params_vary:
+            kernel = (_TABLE_U_GRID ** (-gamma)
+                      * (1.0 + _TABLE_U_GRID ** alpha)
+                      ** ((gamma - beta) / alpha))
+            _, g_table = _TABLE_SBT(kernel, extrap=True)
+            g_table = g_table * jnp.sqrt(jnp.pi / 2.0)
+        else:
+            g_table = _A10_G_TABLE
+
         # r_500c(M, z) [Mpc]
         r_delta = jnp.power(
             3.0 * M[None, :] / (4.0 * jnp.pi * 500.0
@@ -252,17 +293,17 @@ def cl_yy_1h_2h(ell: jax.Array,
         s_query = ((ell[:, None, None] + 0.5)
                    * r_delta[None, :, :]
                    * (1.0 + cg.z)[None, :, None]
-                   / (_A10_C500 * cg.chi[None, :, None]))
+                   / (c500 * cg.chi[None, :, None]))
 
         # 1-D interpolation
         log_sq = jnp.log(jnp.clip(s_query, 1e-30)).ravel()
         g_interp = _interp_1d_log(
-            log_sq, _LOG_TABLE_S, _A10_G_TABLE
+            log_sq, _LOG_TABLE_S, g_table
         ).reshape(n_ell, n_z, n_m)
 
         # ũ = 4π P0 (r/c500)³ g(s)  [Mpc³]
-        r_over_c = r_delta / _A10_C500
-        u_at_ell = (4.0 * jnp.pi * _A10_P0
+        r_over_c = r_delta / c500
+        u_at_ell = (4.0 * jnp.pi * P0
                     * r_over_c[None, :, :] ** 3
                     * g_interp)
 
@@ -279,7 +320,8 @@ def cl_yy_1h_2h(ell: jax.Array,
                                  * hg.rho_crit_z[:, None]),
             1.0 / 3.0)
 
-        P0, xc, beta_vals = _b12_params(M[None, :], cg.z[:, None])
+        P0, xc, beta_vals = _b12_params(M[None, :], cg.z[:, None],
+                                        profile_params=profile_params)
 
         # s = k_phys × r_200c × xc,  k_phys = (ell+0.5)(1+z)/chi
         s_query = ((ell[:, None, None] + 0.5)

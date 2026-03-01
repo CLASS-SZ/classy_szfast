@@ -181,7 +181,7 @@ def _predict_pk(full: dict, z_grid: jax.Array,
     # Batched parameter dict
     n_z = int(z_grid.shape[0])
     params_pk = {k_name: [v] * n_z for k_name, v in full.items()}
-    params_pk['z_pk_save_nonclass'] = [float(z) for z in z_grid]
+    params_pk['z_pk_save_nonclass'] = list(z_grid)
 
     # Emulator: log10[ l(l+1) P(k) / (2π) ]
     log10pk = cp_pkl_nn_jax[cosmo_model].predict(params_pk)
@@ -218,20 +218,15 @@ def _compute_sigma(k: jax.Array, pk: jax.Array, n_z: int):
     with _warnings.catch_warnings():
         _warnings.filterwarnings("ignore",
                                  message="use backend='jax' if desired")
-        tv = TophatVar(np.asarray(k), lowring=True, backend='jax')
+        tv = TophatVar(np.array(k, copy=False), lowring=True, backend='jax')
 
     R_all, var_all = tv(pk, extrap=True)            # (n_z, n_R)
     R = R_all.flatten()                              # shared across z
 
     sigma = jnp.sqrt(var_all)
 
-    # dsigma²/dR via central finite differences (numpy, run once)
-    R_np  = np.asarray(R)
-    var_np = np.asarray(var_all)
-    dvar_np = np.empty_like(var_np)
-    for iz in range(n_z):
-        dvar_np[iz, :] = np.gradient(var_np[iz, :], R_np)
-    dsigma2dR = jnp.array(dvar_np)
+    # dsigma²/dR via central finite differences (pure JAX, differentiable)
+    dsigma2dR = jax.vmap(lambda var_z: jnp.gradient(var_z, R))(var_all)
 
     return R, sigma, dsigma2dR
 

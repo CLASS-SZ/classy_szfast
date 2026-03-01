@@ -20,3 +20,4 @@ from .halo_model import cl_yy, prepare_grids, arnaud10_profile_x, duffy08_cvir
 from .cosmology import CosmoGrids, build as build_cosmo_grids
 from .hmf import HaloGrids, build_halo_grids, tinker08_hmf, tinker10_bias
 from .power_spectrum import cl_yy_1h_2h
+from .differentiable import CosmoParams, ProfileParamsA10, ProfileParamsB12, cl_yy_from_params
