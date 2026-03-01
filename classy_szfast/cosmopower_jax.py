@@ -18,6 +18,7 @@ class CosmoPowerJAX_custom(CPJ):
         self.ten_to_predictions = True
         if 'ten_to_predictions' in kwargs.keys():
             self.ten_to_predictions = kwargs['ten_to_predictions']
+        self._jit_forward = None
 
     def _dict_to_ordered_arr_np(self,
                                input_dict,
@@ -44,6 +45,99 @@ class CosmoPowerJAX_custom(CPJ):
         else:
             return np.stack([input_dict[k] for k in input_dict], axis=1)
 
+
+    def _build_jit_forward(self):
+        """Build a JIT-compiled float32 forward pass.
+
+        Casts all weights and normalization stats to float32 JAX arrays and
+        captures them in a @jax.jit closure, fusing the entire forward pass
+        into a single XLA kernel.  Float32 is appropriate because the NN
+        weights are trained in float32; float64 adds overhead with no accuracy
+        gain at the ~0.1-1% emulator accuracy level.
+
+        Called lazily on first predict() so that any post-init mutations
+        (e.g. ten_to_predictions = False) are captured.
+        """
+        from jax.nn import sigmoid
+
+        # Cast weights to float32 JAX arrays (captured in the JIT closure)
+        weights_f32 = [
+            (jnp.array(w, dtype=jnp.float32), jnp.array(b, dtype=jnp.float32))
+            for w, b in self.weights
+        ]
+        hyper_params_f32 = [
+            (jnp.array(a, dtype=jnp.float32), jnp.array(b, dtype=jnp.float32))
+            for a, b in self.hyper_params
+        ]
+        param_mean = jnp.array(self.param_train_mean, dtype=jnp.float32)
+        param_std = jnp.array(self.param_train_std, dtype=jnp.float32)
+        feat_mean = jnp.array(self.feature_train_mean, dtype=jnp.float32)
+        feat_std = jnp.array(self.feature_train_std, dtype=jnp.float32)
+
+        n_hidden = len(weights_f32) - 1
+        use_full_bias = (self.probe == 'custom_log' or self.probe == 'custom_pca')
+        is_log = bool(self.log)
+        ten_to_preds = bool(self.ten_to_predictions)
+
+        # PCA probe extras (only needed when is_log is False)
+        if not is_log:
+            pca_matrix_f32 = jnp.array(self.pca_matrix, dtype=jnp.float32)
+            training_std_f32 = jnp.array(self.training_std, dtype=jnp.float32)
+            training_mean_f32 = jnp.array(self.training_mean, dtype=jnp.float32)
+            is_cmb_pp = (self.probe == 'cmb_pp')
+        else:
+            pca_matrix_f32 = training_std_f32 = training_mean_f32 = None
+            is_cmb_pp = False
+
+        @jax.jit
+        def forward(x):
+            x = x.astype(jnp.float32)
+            # Standardise input
+            h = (x - param_mean) / param_std
+            # Hidden layers with activation: (beta + sigmoid(alpha*z)*(1-beta)) * z
+            for i in range(n_hidden):
+                w, b = weights_f32[i]
+                alpha, beta = hyper_params_f32[i]
+                z = jnp.dot(h, w.T) + b
+                h = jnp.multiply(
+                    jnp.add(beta, jnp.multiply(
+                        sigmoid(jnp.multiply(alpha, z)),
+                        jnp.subtract(1.0, beta))),
+                    z)
+            # Final layer (no activation)
+            w, b = weights_f32[-1]
+            preds = jnp.dot(h, w.T) + (b if use_full_bias else b[-1])
+            # Undo standardisation
+            preds = preds * feat_std + feat_mean
+            if is_log:
+                if ten_to_preds:
+                    preds = 10.0 ** preds
+            else:
+                preds = (preds @ pca_matrix_f32) * training_std_f32 + training_mean_f32
+                if is_cmb_pp:
+                    preds = 10.0 ** preds
+            return preds.squeeze()
+
+        # Warmup: trigger JIT compilation so first real call is fast
+        dummy = jnp.zeros((1, self.n_parameters), dtype=jnp.float32)
+        forward(dummy).block_until_ready()
+
+        self._jit_forward = forward
+
+    def predict(self, input_vec):
+        """Emulate cosmological power spectrum using JIT-compiled forward pass."""
+        # Lazy-build JIT forward on first call
+        if self._jit_forward is None:
+            self._build_jit_forward()
+
+        # Dict-to-array conversion (outside JIT boundary)
+        if isinstance(input_vec, dict):
+            input_vec = self._dict_to_ordered_arr_np(input_vec)
+
+        if len(input_vec.shape) == 1:
+            input_vec = input_vec.reshape(-1, self.n_parameters)
+
+        return self._jit_forward(input_vec)
 
     def _predict(self, weights, hyper_params, param_train_mean, param_train_std,
                  feature_train_mean, feature_train_std, input_vec):
