@@ -168,22 +168,43 @@ def build(params: dict,
 # Internal helpers (call emulators / mcfit)
 # ===================================================================
 
+# Per-cosmo_model PKL emulator grid + prefactor convention. Mirrors
+# classy_szfast/classy_szfast.py (lines 99–118, 206–214, 267–275) which
+# distinguishes 'ede-v2' from all other cosmologies.
+#
+# Final n_k = nk // ndspl. Final k = geomspace(kmin, kmax, nk)[::ndspl].
+# prefac_type:
+#   'ell' — emulator returns log10[ ell(ell+1) Pk / (2π) ] with ell labels
+#           = arange(2, nk+2)[::ndspl]; recover Pk via × 1/(ell(ell+1)/(2π)).
+#   'k3'  — emulator returns log10[ k³ Pk ]; recover Pk via × k^-3.
+_PK_GRID_CONFIG = {
+    'ede-v2': dict(kmin=5e-4, kmax=10.0,  nk=1000, ndspl=1,  prefac='k3'),
+    # Default (everything else: 'lcdm', 'mnu', 'neff', 'wcdm', 'ede', 'mnu-3states')
+    '_default': dict(kmin=1e-4, kmax=50.0, nk=5000, ndspl=10, prefac='ell'),
+}
+
+
 def _predict_pk(full: dict, z_grid: jax.Array,
                 cosmo_model: str):
     """P(k, z): k in 1/Mpc, P in Mpc³."""
-    # k grid (1/Mpc) — emulator native
-    k = jnp.geomspace(1e-4, 50.0, 5000)[::10]          # 500 pts
+    cfg = _PK_GRID_CONFIG.get(cosmo_model, _PK_GRID_CONFIG['_default'])
 
-    # Artificial ell labels for the power-factor
-    ls = jnp.arange(2, 5002)[::10]
-    pk_power_fac = 1.0 / (ls * (ls + 1.0) / (2.0 * jnp.pi))
+    # k grid (1/Mpc) — emulator native
+    k = jnp.geomspace(cfg['kmin'], cfg['kmax'], cfg['nk'])[::cfg['ndspl']]
+
+    # Prefactor used to undo the emulator's normalisation
+    if cfg['prefac'] == 'ell':
+        ls = jnp.arange(2, cfg['nk'] + 2)[::cfg['ndspl']]
+        pk_power_fac = 1.0 / (ls * (ls + 1.0) / (2.0 * jnp.pi))
+    else:                                       # 'k3'
+        pk_power_fac = k ** -3
 
     # Batched parameter dict
     n_z = int(z_grid.shape[0])
     params_pk = {k_name: [v] * n_z for k_name, v in full.items()}
     params_pk['z_pk_save_nonclass'] = list(z_grid)
 
-    # Emulator: log10[ l(l+1) P(k) / (2π) ]
+    # Emulator: log10[ prefactor × P(k) ]
     log10pk = cp_pkl_nn_jax[cosmo_model].predict(params_pk)
 
     pk = jnp.float64(10.0**log10pk * pk_power_fac)       # (n_z, n_k)
@@ -192,18 +213,32 @@ def _predict_pk(full: dict, z_grid: jax.Array,
 
 def _predict_distances(full: dict, z_grid: jax.Array,
                        cosmo_model: str):
-    """H(z)/c (1/Mpc), chi (Mpc), Da (Mpc) interpolated to z_grid."""
-    z_fine = jnp.linspace(0.0, 20.0, 5000)
+    """H(z)/c (1/Mpc), chi (Mpc), Da (Mpc) interpolated to z_grid.
+
+    Each HZ / DAZ emulator was trained on its own z-grid:
+      - 'ede-v2': z ∈ [0, 20]
+      - default : z ∈ [0, 20]   (same convention, modes=5000)
+    Size of the underlying z-grid follows the emulator's output length
+    (ede-v2's DAZ has 4999 points vs HZ's 5000 — small fencepost asymmetry).
+    """
     params_one = {k: [v] for k, v in full.items()}
 
     Hz_fine = cp_h_nn_jax[cosmo_model].predict(params_one)   # 1/Mpc
     Da_fine = cp_da_nn_jax[cosmo_model].predict(params_one)  # Mpc
-    chi_fine = Da_fine * (1.0 + z_fine)                      # Mpc
 
-    Hz  = jnp.interp(z_grid, z_fine, Hz_fine)
-    chi = jnp.interp(z_grid, z_fine, chi_fine)
+    # zmax for the distance emulators (NOT the Pk-grid zmax). Both ede-v2
+    # and lcdm distance emulators were trained on z ∈ [0, 20] in the
+    # current classy_szfast distribution.
+    zmax_dist = 20.0
+    z_fine_h = jnp.linspace(0.0, zmax_dist, Hz_fine.shape[-1])
+    z_fine_d = jnp.linspace(0.0, zmax_dist, Da_fine.shape[-1])
+
+    chi_fine = Da_fine * (1.0 + z_fine_d)                    # Mpc
+
+    Hz  = jnp.interp(z_grid, z_fine_h, Hz_fine)
+    chi = jnp.interp(z_grid, z_fine_d, chi_fine)
     chi = jnp.where(chi < 1.0, 1.0, chi)
-    Da  = jnp.interp(z_grid, z_fine, Da_fine)
+    Da  = jnp.interp(z_grid, z_fine_d, Da_fine)
 
     return Hz, chi, Da
 
