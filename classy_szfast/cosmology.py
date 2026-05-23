@@ -56,7 +56,8 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 
-from .cosmopower_jax import cp_pkl_nn_jax, cp_h_nn_jax, cp_da_nn_jax
+from .cosmopower_jax import (cp_pkl_nn_jax, cp_pknl_nn_jax,
+                              cp_h_nn_jax, cp_da_nn_jax)
 from .emulators_meta_data import emulator_dict
 
 jax.config.update("jax_enable_x64", True)
@@ -189,22 +190,32 @@ _PK_GRID_CONFIG = {
                      extrap_kmin=None),
 }
 
-def _predict_pk(full: dict, z_grid: jax.Array,
-                cosmo_model: str):
-    """P(k, z): k in 1/Mpc, P in Mpc³.
+def _predict_pk_kind(full: dict, z_grid: jax.Array, cosmo_model: str,
+                     kind: str):
+    """Generic helper: linear or nonlinear matter power spectrum.
 
-    For cosmo_models whose emulator has a higher kmin than the lcdm default,
-    optionally extend down via P(k) ∝ k^n_s (primordial slope, valid for
-    k << k_eq). The extra points use the SAME log-k step as the emulator
-    grid so the combined array stays uniformly log-spaced — required by
-    downstream mcfit (TophatVar) σ(R) integration.
-    See ``_PK_GRID_CONFIG[…]['extrap_kmin']``.
+    ``kind``: 'linear' → cp_pkl_nn_jax; 'nonlinear' → cp_pknl_nn_jax.
+
+    Same k-grid and ``extrap_kmin`` configuration apply to both since the
+    PKL_v* and PKNL_v* emulators share architecture / k-grid per cosmo_model.
+
+    The low-k k^n_s extrapolation is also valid for nonlinear Pk: at k → 0
+    nonlinear corrections vanish (P_nl → P_lin), so both spectra approach
+    the same primordial-slope asymptote at all z. Growth factor D(z) only
+    rescales the amplitude, not the slope, and we anchor to the emulator
+    value at each z separately — so the extrapolation is z-correct as well.
     """
+    if kind == 'linear':
+        emulator = cp_pkl_nn_jax[cosmo_model]
+    elif kind == 'nonlinear':
+        emulator = cp_pknl_nn_jax[cosmo_model]
+    else:
+        raise ValueError(f"kind must be 'linear' or 'nonlinear', got {kind!r}")
+
     cfg = _PK_GRID_CONFIG.get(cosmo_model, _PK_GRID_CONFIG['_default'])
 
     # k grid (1/Mpc) — emulator native
     k_emu = jnp.geomspace(cfg['kmin'], cfg['kmax'], cfg['nk'])[::cfg['ndspl']]
-    n_k_emu = k_emu.shape[0]
 
     # Prefactor used to undo the emulator's normalisation
     if cfg['prefac'] == 'ell':
@@ -219,23 +230,20 @@ def _predict_pk(full: dict, z_grid: jax.Array,
     params_pk['z_pk_save_nonclass'] = list(z_grid)
 
     # Emulator: log10[ prefactor × P(k) ]
-    log10pk = cp_pkl_nn_jax[cosmo_model].predict(params_pk)
+    log10pk = emulator.predict(params_pk)
 
     pk_emu = jnp.float64(10.0**log10pk * pk_power_fac)       # (n_z, n_k_emu)
 
-    # Optional low-k extrapolation with P(k) ∝ k^n_s
+    # Optional low-k extrapolation with P(k) ∝ k^n_s (see docstring above)
     extrap_kmin = cfg.get('extrap_kmin')
     if extrap_kmin is not None and extrap_kmin < cfg['kmin']:
         n_s = full['n_s']
         # Match the emulator's log-step so the combined array stays uniformly
         # log-spaced (mcfit requires this for the TophatVar σ(R) integration).
         log10_step = (float(jnp.log10(cfg['kmax'])) - float(jnp.log10(cfg['kmin']))) / (cfg['nk'] - 1)
-        # Account for emulator's stride (ndspl) — log-step on the *output* grid
         log10_step_out = log10_step * cfg['ndspl']
-        # Number of extra points to bridge from extrap_kmin to kmin at this step
         n_extra = int(round((float(jnp.log10(cfg['kmin'])) - float(jnp.log10(extrap_kmin)))
                             / log10_step_out))
-        # Build extrapolation k-grid with the same log-step; exclude kmin (already in k_emu)
         log10_k_extra = jnp.log10(cfg['kmin']) - jnp.arange(n_extra, 0, -1) * log10_step_out
         k_extra = jnp.power(10.0, log10_k_extra)
         pk_at_kmin = pk_emu[:, 0:1]                          # (n_z, 1)
@@ -247,6 +255,16 @@ def _predict_pk(full: dict, z_grid: jax.Array,
         pk = pk_emu
 
     return k, pk
+
+
+def _predict_pk(full: dict, z_grid: jax.Array, cosmo_model: str):
+    """Linear matter power spectrum: P_lin(k, z). k in 1/Mpc, P in Mpc³."""
+    return _predict_pk_kind(full, z_grid, cosmo_model, 'linear')
+
+
+def _predict_pknl(full: dict, z_grid: jax.Array, cosmo_model: str):
+    """Non-linear matter power spectrum: P_nl(k, z). k in 1/Mpc, P in Mpc³."""
+    return _predict_pk_kind(full, z_grid, cosmo_model, 'nonlinear')
 
 
 def _predict_distances(full: dict, z_grid: jax.Array,
@@ -316,10 +334,20 @@ def _compute_sigma(k: jax.Array, pk: jax.Array, n_z: int):
 # ===================================================================
 
 def get_pk(params, z_arr, cosmo_model='lcdm'):
-    """Quick accessor: P(k, z).  k in 1/Mpc, P in Mpc³."""
+    """Quick accessor: linear P(k, z).  k in 1/Mpc, P in Mpc³."""
     full = dict(emulator_dict[cosmo_model]['default'])
     full.update(params)
     return _predict_pk(full, jnp.asarray(z_arr), cosmo_model)
+
+
+def get_pknl(params, z_arr, cosmo_model='lcdm'):
+    """Quick accessor: nonlinear P(k, z) (HMcode).  k in 1/Mpc, P in Mpc³.
+
+    Uses the same k-grid + low-k extrapolation as :func:`get_pk`.
+    """
+    full = dict(emulator_dict[cosmo_model]['default'])
+    full.update(params)
+    return _predict_pknl(full, jnp.asarray(z_arr), cosmo_model)
 
 
 def get_distances(params, z_arr, cosmo_model='lcdm'):
