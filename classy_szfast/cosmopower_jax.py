@@ -118,9 +118,17 @@ class CosmoPowerJAX_custom(CPJ):
                     preds = 10.0 ** preds
             return preds.squeeze()
 
-        # Warmup: trigger JIT compilation so first real call is fast
+        # Warmup: trigger JIT compilation so the first real call is fast.
+        # `block_until_ready` only exists on concrete arrays; if `predict()`
+        # is called from inside another jit trace (e.g. the caller wraps a
+        # function that calls predict() in jax.jit), `forward(dummy)` returns
+        # a tracer and `.block_until_ready()` raises AttributeError. Skip the
+        # block in that case — JIT compilation will still happen on the first
+        # real call from the outer trace.
         dummy = jnp.zeros((1, self.n_parameters), dtype=jnp.float32)
-        forward(dummy).block_until_ready()
+        warmup = forward(dummy)
+        if hasattr(warmup, "block_until_ready"):
+            warmup.block_until_ready()
 
         self._jit_forward = forward
 
