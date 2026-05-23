@@ -173,31 +173,45 @@ def build(params: dict,
 # distinguishes 'ede-v2' from all other cosmologies.
 #
 # Final n_k = nk // ndspl. Final k = geomspace(kmin, kmax, nk)[::ndspl].
-# prefac_type:
+# prefac:
 #   'ell' — emulator returns log10[ ell(ell+1) Pk / (2π) ] with ell labels
 #           = arange(2, nk+2)[::ndspl]; recover Pk via × 1/(ell(ell+1)/(2π)).
 #   'k3'  — emulator returns log10[ k³ Pk ]; recover Pk via × k^-3.
+# extrap_kmin (optional): if set and < kmin, extend the Pk grid down to this
+#   k using a primordial-slope extrapolation P(k) ∝ k^n_s. The matter Pk
+#   on large scales (k << k_eq ≈ 0.01/Mpc) approaches this asymptotic shape;
+#   the extrapolation gives ~1% accuracy down to k ~ 1e-4/Mpc.
 _PK_GRID_CONFIG = {
-    'ede-v2': dict(kmin=5e-4, kmax=10.0,  nk=1000, ndspl=1,  prefac='k3'),
+    'ede-v2': dict(kmin=5e-4, kmax=10.0,  nk=1000, ndspl=1,  prefac='k3',
+                   extrap_kmin=1e-4),
     # Default (everything else: 'lcdm', 'mnu', 'neff', 'wcdm', 'ede', 'mnu-3states')
-    '_default': dict(kmin=1e-4, kmax=50.0, nk=5000, ndspl=10, prefac='ell'),
+    '_default': dict(kmin=1e-4, kmax=50.0, nk=5000, ndspl=10, prefac='ell',
+                     extrap_kmin=None),
 }
-
 
 def _predict_pk(full: dict, z_grid: jax.Array,
                 cosmo_model: str):
-    """P(k, z): k in 1/Mpc, P in Mpc³."""
+    """P(k, z): k in 1/Mpc, P in Mpc³.
+
+    For cosmo_models whose emulator has a higher kmin than the lcdm default,
+    optionally extend down via P(k) ∝ k^n_s (primordial slope, valid for
+    k << k_eq). The extra points use the SAME log-k step as the emulator
+    grid so the combined array stays uniformly log-spaced — required by
+    downstream mcfit (TophatVar) σ(R) integration.
+    See ``_PK_GRID_CONFIG[…]['extrap_kmin']``.
+    """
     cfg = _PK_GRID_CONFIG.get(cosmo_model, _PK_GRID_CONFIG['_default'])
 
     # k grid (1/Mpc) — emulator native
-    k = jnp.geomspace(cfg['kmin'], cfg['kmax'], cfg['nk'])[::cfg['ndspl']]
+    k_emu = jnp.geomspace(cfg['kmin'], cfg['kmax'], cfg['nk'])[::cfg['ndspl']]
+    n_k_emu = k_emu.shape[0]
 
     # Prefactor used to undo the emulator's normalisation
     if cfg['prefac'] == 'ell':
         ls = jnp.arange(2, cfg['nk'] + 2)[::cfg['ndspl']]
         pk_power_fac = 1.0 / (ls * (ls + 1.0) / (2.0 * jnp.pi))
     else:                                       # 'k3'
-        pk_power_fac = k ** -3
+        pk_power_fac = k_emu ** -3
 
     # Batched parameter dict
     n_z = int(z_grid.shape[0])
@@ -207,7 +221,31 @@ def _predict_pk(full: dict, z_grid: jax.Array,
     # Emulator: log10[ prefactor × P(k) ]
     log10pk = cp_pkl_nn_jax[cosmo_model].predict(params_pk)
 
-    pk = jnp.float64(10.0**log10pk * pk_power_fac)       # (n_z, n_k)
+    pk_emu = jnp.float64(10.0**log10pk * pk_power_fac)       # (n_z, n_k_emu)
+
+    # Optional low-k extrapolation with P(k) ∝ k^n_s
+    extrap_kmin = cfg.get('extrap_kmin')
+    if extrap_kmin is not None and extrap_kmin < cfg['kmin']:
+        n_s = full['n_s']
+        # Match the emulator's log-step so the combined array stays uniformly
+        # log-spaced (mcfit requires this for the TophatVar σ(R) integration).
+        log10_step = (float(jnp.log10(cfg['kmax'])) - float(jnp.log10(cfg['kmin']))) / (cfg['nk'] - 1)
+        # Account for emulator's stride (ndspl) — log-step on the *output* grid
+        log10_step_out = log10_step * cfg['ndspl']
+        # Number of extra points to bridge from extrap_kmin to kmin at this step
+        n_extra = int(round((float(jnp.log10(cfg['kmin'])) - float(jnp.log10(extrap_kmin)))
+                            / log10_step_out))
+        # Build extrapolation k-grid with the same log-step; exclude kmin (already in k_emu)
+        log10_k_extra = jnp.log10(cfg['kmin']) - jnp.arange(n_extra, 0, -1) * log10_step_out
+        k_extra = jnp.power(10.0, log10_k_extra)
+        pk_at_kmin = pk_emu[:, 0:1]                          # (n_z, 1)
+        pk_extra = pk_at_kmin * (k_extra[None, :] / cfg['kmin']) ** n_s
+        k  = jnp.concatenate([k_extra, k_emu])
+        pk = jnp.concatenate([pk_extra, pk_emu], axis=1)
+    else:
+        k = k_emu
+        pk = pk_emu
+
     return k, pk
 
 
