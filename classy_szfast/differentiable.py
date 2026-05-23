@@ -62,12 +62,20 @@ class ProfileParamsA10(NamedTuple):
     """Arnaud 2010 gNFW pressure-profile parameters.
 
     Defaults are the Arnaud et al. 2010 best-fit values.
+
+    ``B`` is the hydrostatic mass bias (``B = M_true / M_HSE``).
+    The Arnaud 2010 P_500 normalization and r_500c are calibrated against
+    X-ray HSE masses, so when integrating against a halo mass function in
+    true masses the pressure profile is evaluated at the effective
+    M_HSE = M_true / B (and r_500c_HSE = r_500c_true / B^(1/3)).
+    Default 1.0 reproduces the no-bias result.
     """
     P0:    float | jax.Array = 8.130
     c500:  float | jax.Array = 1.156
     gamma: float | jax.Array = 0.3292
     alpha: float | jax.Array = 1.0620
     beta:  float | jax.Array = 5.4807
+    B:     float | jax.Array = 1.0
 
 
 class ProfileParamsB12(NamedTuple):
@@ -75,6 +83,10 @@ class ProfileParamsB12(NamedTuple):
 
     Each of P0, xc, beta follows:  A × (M/10¹⁴)^α_m × (1+z)^α_z.
     Defaults are the Battaglia et al. 2012 Table 1 best-fit values.
+
+    ``B`` is the hydrostatic mass bias (``B = M_true / M_HSE``); see the
+    docstring of :class:`ProfileParamsA10` for the convention.
+    Default 1.0 reproduces the no-bias result.
     """
     P0_A:      float | jax.Array = 18.1
     P0_am:     float | jax.Array = 0.154
@@ -85,6 +97,7 @@ class ProfileParamsB12(NamedTuple):
     beta_A:    float | jax.Array = 4.35
     beta_am:   float | jax.Array = 0.0393
     beta_az:   float | jax.Array = 0.415
+    B:         float | jax.Array = 1.0
 
 
 # ===================================================================

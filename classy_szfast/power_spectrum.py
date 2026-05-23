@@ -259,7 +259,7 @@ def cl_yy_1h_2h(ell: jax.Array,
     n_z = cg.z.shape[0]
     n_m = hg.lnM.shape[0]
 
-    M = jnp.exp(hg.lnM)                              # (n_m,) M_sun
+    M = jnp.exp(hg.lnM)                              # (n_m,) M_sun  — TRUE halo mass
 
     # ── y_ell computation ────────────────────────────────────────────────
     if profile == 'arnaud10':
@@ -269,6 +269,10 @@ def cl_yy_1h_2h(ell: jax.Array,
         gamma = profile_params.get('gamma', _A10_GAMMA) if profile_params else _A10_GAMMA
         alpha = profile_params.get('alpha', _A10_ALPHA) if profile_params else _A10_ALPHA
         beta  = profile_params.get('beta', _A10_BETA) if profile_params else _A10_BETA
+        # Hydrostatic mass bias: M_HSE = M_true / B. The Arnaud 10 P_500 was
+        # calibrated against M_HSE, so the profile is evaluated at M_eff and
+        # r_500c at M_eff. B = 1.0 reproduces the no-bias case (back-compat).
+        B     = profile_params.get('B', 1.0) if profile_params else 1.0
 
         # Recompute FT table when shape params differ from defaults
         shape_params_vary = (profile_params is not None
@@ -283,11 +287,12 @@ def cl_yy_1h_2h(ell: jax.Array,
         else:
             g_table = _A10_G_TABLE
 
-        # r_500c(M, z) [Mpc]
+        # Effective (HSE) mass and r_500c. M_eff = M_true / B.
+        M_eff = M / B                                  # (n_m,)
         r_delta = jnp.power(
-            3.0 * M[None, :] / (4.0 * jnp.pi * 500.0
-                                 * hg.rho_crit_z[:, None]),
-            1.0 / 3.0)                                # (n_z, n_m)
+            3.0 * M_eff[None, :] / (4.0 * jnp.pi * 500.0
+                                     * hg.rho_crit_z[:, None]),
+            1.0 / 3.0)                                # (n_z, n_m) — this is r_500c_HSE
 
         # s = k_phys × r_500c / c500,  k_phys = (ell+0.5)(1+z)/chi = (ell+0.5)/d_A
         s_query = ((ell[:, None, None] + 0.5)
@@ -307,20 +312,26 @@ def cl_yy_1h_2h(ell: jax.Array,
                     * r_over_c[None, :, :] ** 3
                     * g_interp)
 
-        # Arnaud 2010 electron pressure P_500 [eV/cm³]
+        # Arnaud 2010 electron pressure P_500 at M_HSE [eV/cm³]
         H0_over_c = h * 100.0 * 1e3 / _c_SI   # H0/c in 1/Mpc
         Ez = cg.Hz / H0_over_c                  # (n_z,)
-        M_h = M * h                              # M_sun/h
-        P_delta_grid = _P500_arnaud10(M_h[None, :], Ez[:, None], h)
+        M_h_eff = M_eff * h                      # M_HSE in M_sun/h
+        P_delta_grid = _P500_arnaud10(M_h_eff[None, :], Ez[:, None], h)
 
     else:  # battaglia12
-        # r_200c(M, z) [Mpc]
+        # Hydrostatic mass bias for B12 as well (default 1.0). The B12 fit
+        # is calibrated against simulation halo masses; setting B ≠ 1 lets
+        # users mimic a calibration offset, in the same M → M/B sense as A10.
+        B = profile_params.get('B', 1.0) if profile_params else 1.0
+
+        # Effective (HSE) mass and r_200c
+        M_eff = M / B                                  # (n_m,)
         r_delta = jnp.power(
-            3.0 * M[None, :] / (4.0 * jnp.pi * 200.0
-                                 * hg.rho_crit_z[:, None]),
+            3.0 * M_eff[None, :] / (4.0 * jnp.pi * 200.0
+                                     * hg.rho_crit_z[:, None]),
             1.0 / 3.0)
 
-        P0, xc, beta_vals = _b12_params(M[None, :], cg.z[:, None],
+        P0, xc, beta_vals = _b12_params(M_eff[None, :], cg.z[:, None],
                                         profile_params=profile_params)
 
         # s = k_phys × r_200c × xc,  k_phys = (ell+0.5)(1+z)/chi
