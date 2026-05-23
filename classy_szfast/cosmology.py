@@ -253,20 +253,27 @@ def _predict_distances(full: dict, z_grid: jax.Array,
                        cosmo_model: str):
     """H(z)/c (1/Mpc), chi (Mpc), Da (Mpc) interpolated to z_grid.
 
-    Each HZ / DAZ emulator was trained on its own z-grid:
-      - 'ede-v2': z ∈ [0, 20]
-      - default : z ∈ [0, 20]   (same convention, modes=5000)
-    Size of the underlying z-grid follows the emulator's output length
-    (ede-v2's DAZ has 4999 points vs HZ's 5000 — small fencepost asymmetry).
+    Both HZ and DAZ emulators were trained on z ∈ [0, 20] sampled by
+    ``linspace(0, 20, 5000)`` (cp_z_interp in classy_szfast.py:279-280).
+    For lcdm-style cosmologies the DAZ emulator includes z=0 (returning
+    chi(0)=Da(0)=0 as the first point); for ede-v2 the DAZ emulator was
+    trained without the z=0 anchor and returns only 4999 points starting
+    at z=0.004, so we prepend a zero — same fix as
+    classy_szfast.py:1110-1111 in the cobaya wrapper. Without this,
+    chi(z=0.005) for ede-v2 is wrong by ~80%.
     """
     params_one = {k: [v] for k, v in full.items()}
 
     Hz_fine = cp_h_nn_jax[cosmo_model].predict(params_one)   # 1/Mpc
     Da_fine = cp_da_nn_jax[cosmo_model].predict(params_one)  # Mpc
 
-    # zmax for the distance emulators (NOT the Pk-grid zmax). Both ede-v2
-    # and lcdm distance emulators were trained on z ∈ [0, 20] in the
-    # current classy_szfast distribution.
+    # ede-v2 DAZ emulator omits z=0; restore it so chi(0)=0 and the
+    # underlying z-grid matches HZ. Mirrors classy_szfast.py:1110.
+    if cosmo_model == 'ede-v2':
+        Da_fine = jnp.concatenate(
+            [jnp.zeros(1, dtype=Da_fine.dtype), Da_fine])
+
+    # Both H and Da emulators share the same z-grid after the z=0 fix above.
     zmax_dist = 20.0
     z_fine_h = jnp.linspace(0.0, zmax_dist, Hz_fine.shape[-1])
     z_fine_d = jnp.linspace(0.0, zmax_dist, Da_fine.shape[-1])
