@@ -58,7 +58,7 @@ import numpy as np
 
 from .cosmopower_jax import (cp_pkl_nn_jax, cp_pknl_nn_jax,
                               cp_h_nn_jax, cp_da_nn_jax)
-from .emulators_meta_data import emulator_dict
+from .emulators_meta_data import emulator_dict, pknl_zmax
 
 jax.config.update("jax_enable_x64", True)
 
@@ -231,6 +231,11 @@ def _predict_pk_kind(full: dict, z_grid: jax.Array, cosmo_model: str,
 
     # Emulator: log10[ prefactor × P(k) ]
     log10pk = emulator.predict(params_pk)
+
+    # P_nl = P_lin above pknl_zmax
+    if kind == 'nonlinear' and cosmo_model in pknl_zmax:
+        log10pk_lin = cp_pkl_nn_jax[cosmo_model].predict(params_pk)
+        log10pk = jnp.where((jnp.asarray(z_grid) > pknl_zmax[cosmo_model])[:, None], log10pk_lin, log10pk)
 
     pk_emu = jnp.float64(10.0**log10pk * pk_power_fac)       # (n_z, n_k_emu)
 

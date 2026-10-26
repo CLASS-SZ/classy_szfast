@@ -35,6 +35,11 @@ cosmopower_derived_params_names = ['100*theta_s',
 
 cp_l_max_scalars = 11000 # max multipole of training data
 
+# redshift above which the non-linear matter power spectrum is set to the linear one.
+# ede-v2: CLASS-EDE stops computing HMcode at z ~ 5-10 (cosmology dependent) and the
+# PKNL_v2/PKNLCB_v2 emulators are not trained beyond.
+pknl_zmax = {'ede-v2': 5.}
+
 cosmo_model_list = [
     'lcdm',
     'mnu',

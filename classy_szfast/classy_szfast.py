@@ -2,7 +2,7 @@ from .utils import *
 from .utils import Const, jax_gradient
 from .config import *
 import numpy as np
-from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list
+from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list, pknl_zmax
 from .cosmopower import cp_tt_nn, cp_te_nn, cp_ee_nn, cp_ee_nn, cp_pp_nn, cp_pknl_nn, cp_pkl_nn, cp_der_nn, cp_da_nn, cp_h_nn, cp_s8_nn, cp_pkl_fftlog_alphas_real_nn, cp_pkl_fftlog_alphas_imag_nn, cp_pkl_fftlog_alphas_nus
 from .cosmopower_jax import cp_tt_nn_jax, cp_te_nn_jax, cp_ee_nn_jax, cp_ee_nn_jax, cp_pp_nn_jax, cp_pknl_nn_jax, cp_pkl_nn_jax, cp_der_nn_jax, cp_da_nn_jax, cp_h_nn_jax, cp_s8_nn_jax
 from .pks_and_sigmas import *
@@ -639,6 +639,8 @@ class Class_szfast(object):
                 params_dict_pp['z_pk_save_nonclass'] = [zp]
                 pkl_p = self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0]
                 pknl_p = self.cp_pknl_nn[self.cosmo_model].predictions_np(params_dict_pp)[0]
+                if pknl_zmax.get(self.cosmo_model) is not None and zp > pknl_zmax[self.cosmo_model]:
+                    pknl_p = pkl_p
                 pk_ae  = pkl_p + self.Amod*(pknl_p-pkl_p)
                 predicted_pk_spectrum_z.append(pk_ae)
 
@@ -860,6 +862,17 @@ class Class_szfast(object):
 
         predicted_pk_spectrum = self.asarray(predicted_pk_spectrum_z)
 
+        # P_nl = P_lin above pknl_zmax
+        zmax = pknl_zmax.get(self.cosmo_model)
+        if zmax is not None and np.any(np.asarray(z_arr) > zmax):
+            high = (np.asarray(z_arr) > zmax)[:, None]
+            if self.jax_mode:
+                predicted_pkl = self.asarray(self.cp_pkl_nn[self.cosmo_model].predict(params_dict_batch))
+                predicted_pk_spectrum = jnp.where(high, predicted_pkl, predicted_pk_spectrum)
+            else:
+                predicted_pkl = self.asarray(self.cp_pkl_nn[self.cosmo_model].predictions_np(params_dict_batch))
+                predicted_pk_spectrum = np.where(high, predicted_pkl, predicted_pk_spectrum)
+
 
         pk = 10.**predicted_pk_spectrum
 
@@ -990,6 +1003,11 @@ class Class_szfast(object):
     def calculate_pknl_at_z(self,
                            z_asked,
                           params_values_dict=None):
+
+        # P_nl = P_lin above pknl_zmax
+        zmax = pknl_zmax.get(self.cosmo_model)
+        if zmax is not None and z_asked > zmax:
+            return self.calculate_pkl_at_z(z_asked, params_values_dict=params_values_dict)
 
         z_arr = self.cszfast_pk_grid_z
 
