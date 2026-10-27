@@ -2,7 +2,7 @@ from .utils import *
 from .utils import Const, jax_gradient
 from .config import *
 import numpy as np
-from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list, pknl_zmax
+from .emulators_meta_data import emulator_dict, dofftlog_alphas, cp_l_max_scalars, cosmo_model_list, pknl_zmax, ede_models, te_from_r
 from .cosmopower import cp_tt_nn, cp_te_nn, cp_ee_nn, cp_ee_nn, cp_pp_nn, cp_pknl_nn, cp_pkl_nn, cp_der_nn, cp_da_nn, cp_h_nn, cp_s8_nn, cp_pkl_fftlog_alphas_real_nn, cp_pkl_fftlog_alphas_imag_nn, cp_pkl_fftlog_alphas_nus
 from .cosmopower_jax import cp_tt_nn_jax, cp_te_nn_jax, cp_ee_nn_jax, cp_ee_nn_jax, cp_pp_nn_jax, cp_pknl_nn_jax, cp_pkl_nn_jax, cp_der_nn_jax, cp_da_nn_jax, cp_h_nn_jax, cp_s8_nn_jax
 from .pks_and_sigmas import *
@@ -96,7 +96,7 @@ class Class_szfast(object):
 
         cosmo_model_dict = {i: model for i, model in enumerate(cosmo_model_list)}
 
-        if (cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2'):
+        if (cosmo_model_dict[params_settings['cosmo_model']] in ede_models):
         
             self.cszfast_pk_grid_zmax = 20.
             self.cszfast_pk_grid_kmin = 5e-4
@@ -203,7 +203,7 @@ class Class_szfast(object):
         self._resnet_pkl_emu = None
         
 
-        if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
+        if cosmo_model_dict[params_settings['cosmo_model']] in ede_models:
 
             self.cp_ndspl_k = 1
             self.cp_nk = 1000
@@ -264,7 +264,7 @@ class Class_szfast(object):
 
 
 
-        if cosmo_model_dict[params_settings['cosmo_model']] == 'ede-v2':
+        if cosmo_model_dict[params_settings['cosmo_model']] in ede_models:
         
             self.pk_power_fac = self.cszfast_pk_grid_k**-3
         
@@ -519,7 +519,7 @@ class Class_szfast(object):
         lcp = self.asarray(cls['ell'][2:nl+2])
 
         # print('cosmo_model:',self.cosmo_model,nl)
-        if self.cosmo_model == 'ede-v2':
+        if self.cosmo_model in ede_models:
             factor_ttteee = 1./lcp**2 
             factor_pp = 1./lcp**3
         else:
@@ -529,12 +529,17 @@ class Class_szfast(object):
         self.cp_predicted_tt_spectrum *= factor_ttteee
         
 
-        if want_te:
-            self.cp_predicted_te_spectrum = self.cp_te_nn[self.cosmo_model].predictions_np(params_dict)[0]
-            self.cp_predicted_te_spectrum *= factor_ttteee
-        if want_ee:
+        if want_ee or (want_te and self.cosmo_model in te_from_r):
             self.cp_predicted_ee_spectrum = self.cp_ee_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
             self.cp_predicted_ee_spectrum *= factor_ttteee
+        if want_te:
+            if self.cosmo_model in te_from_r:
+                # TE = r_l sqrt(TT EE), the network predicts atanh(r_l)
+                r_l = np.tanh(self.cp_te_nn[self.cosmo_model].predictions_np(params_dict)[0])
+                self.cp_predicted_te_spectrum = r_l * np.sqrt(self.cp_predicted_tt_spectrum * self.cp_predicted_ee_spectrum)
+            else:
+                self.cp_predicted_te_spectrum = self.cp_te_nn[self.cosmo_model].predictions_np(params_dict)[0]
+                self.cp_predicted_te_spectrum *= factor_ttteee
         if want_pp:
             self.cp_predicted_pp_spectrum = self.cp_pp_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
             self.cp_predicted_pp_spectrum *= factor_pp
@@ -1123,7 +1128,7 @@ class Class_szfast(object):
             self.cp_predicted_da = self.cp_da_nn[self.cosmo_model].predict(params_dict)
             # print("self.cp_predicted_da",self.cp_predicted_da)
 
-            if self.cosmo_model == 'ede-v2':
+            if self.cosmo_model in ede_models:
                 # print('ede-v2 case')
                 self.cp_predicted_da = jnp.insert(self.cp_predicted_da, 0, 0)
             self.cp_predicted_da *= (1.+self.cp_z_interp)
@@ -1135,7 +1140,7 @@ class Class_szfast(object):
 
         else:
             # deal with different scaling of DA in different model from emulator training
-            if self.cosmo_model == 'ede-v2':
+            if self.cosmo_model in ede_models:
 
                 self.cp_predicted_da  = self.cp_da_nn[self.cosmo_model].ten_to_predictions_np(params_dict)[0]
                 self.cp_predicted_da = np.insert(self.cp_predicted_da, 0, 0)

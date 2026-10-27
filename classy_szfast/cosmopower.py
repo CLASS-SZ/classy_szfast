@@ -13,7 +13,10 @@ def _load_emulators_for_model(mp):
 
     loaded = {}
     loaded['tt'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TT'])
-    loaded['te'] = Restore_PCAplusNN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
+    if mp in te_from_r:    # atanh(r_l) network (no PCA)
+        loaded['te'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
+    else:
+        loaded['te'] = Restore_PCAplusNN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
     with suppress_warnings():
         loaded['ee'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['EE'])
     loaded['pp'] = Restore_NN(restore_filename=path_to_emulators + 'PP/' + emulator_dict[mp]['PP'])

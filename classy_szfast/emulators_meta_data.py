@@ -38,7 +38,7 @@ cp_l_max_scalars = 11000 # max multipole of training data
 # redshift above which the non-linear matter power spectrum is set to the linear one.
 # ede-v2: CLASS-EDE stops computing HMcode at z ~ 5-10 (cosmology dependent) and the
 # PKNL_v2/PKNLCB_v2 emulators are not trained beyond.
-pknl_zmax = {'ede-v2': 5.}
+pknl_zmax = {'ede-v2': 5., 'ede-v3': 5.}
 
 cosmo_model_list = [
     'lcdm',
@@ -47,8 +47,14 @@ cosmo_model_list = [
     'wcdm',
     'ede',
     'mnu-3states',
-    'ede-v2'
+    'ede-v2',
+    'ede-v3'
 ]
+
+# ede emulator suites: same training set, k/z grids, output conventions and defaults
+ede_models = ('ede-v2', 'ede-v3')
+# suites whose TE emulator predicts atanh(r_l), r_l = C_l^TE / sqrt(C_l^TT C_l^EE)
+te_from_r = ('ede-v3',)
 
 emulator_dict = {}
 emulator_dict['lcdm'] = {}
@@ -58,6 +64,7 @@ emulator_dict['wcdm'] = {}
 emulator_dict['ede'] = {}
 emulator_dict['mnu-3states'] = {}
 emulator_dict['ede-v2'] = {}
+emulator_dict['ede-v3'] = {}
 
 ### note on ncdm:
 # N_ncdm : 3
@@ -242,6 +249,12 @@ emulator_dict['ede-v2']['default']['N_ncdm'] = 1 ### use equivalence with deg_nc
 emulator_dict['ede-v2']['default']['deg_ncdm'] = 3 ### use equivalence with deg_ncdm = 3 for faster computation
 emulator_dict['ede-v2']['default']['m_ncdm'] = 0.02
 emulator_dict['ede-v2']['default']['T_cmb'] = 2.7255
+
+# ede-v3: same training set as ede-v2, retrained networks (October 2026); TE from r_l
+for _obs in ('TT', 'EE', 'PP', 'PKNL', 'PKL', 'DER', 'DAZ', 'HZ', 'S8Z'):
+    emulator_dict['ede-v3'][_obs] = _obs + '_v3'
+emulator_dict['ede-v3']['TE'] = 'rTE_v3'
+emulator_dict['ede-v3']['default'] = dict(emulator_dict['ede-v2']['default'])
 
 
 

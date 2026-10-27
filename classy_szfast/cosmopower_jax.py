@@ -216,7 +216,10 @@ def _load_jax_emulators_for_model(mp):
 
     loaded = {}
     loaded['tt'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TT'])
-    loaded['te'] = Restore_PCAplusNN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
+    if mp in te_from_r:    # atanh(r_l) network (no PCA)
+        loaded['te'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
+    else:
+        loaded['te'] = Restore_PCAplusNN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['TE'])
     with suppress_warnings():
         loaded['ee'] = Restore_NN(restore_filename=path_to_emulators + 'TTTEEE/' + emulator_dict[mp]['EE'])
     loaded['pp'] = Restore_NN(restore_filename=path_to_emulators + 'PP/' + emulator_dict[mp]['PP'])
@@ -232,7 +235,7 @@ def _load_jax_emulators_for_model(mp):
     loaded['der'] = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'derived-parameters/' + emulator_dict[mp]['DER'] + '.npz')
 
     da = CosmoPowerJAX_custom(probe='custom_log', filepath=path_to_emulators + 'growth-and-distances/' + emulator_dict[mp]['DAZ'] + '.npz')
-    if mp != 'ede-v2':
+    if mp not in ede_models:
         da.ten_to_predictions = False
     loaded['da'] = da
 

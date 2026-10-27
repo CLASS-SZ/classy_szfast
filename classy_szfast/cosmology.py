@@ -58,7 +58,7 @@ import numpy as np
 
 from .cosmopower_jax import (cp_pkl_nn_jax, cp_pknl_nn_jax,
                               cp_h_nn_jax, cp_da_nn_jax)
-from .emulators_meta_data import emulator_dict, pknl_zmax
+from .emulators_meta_data import emulator_dict, pknl_zmax, ede_models
 
 jax.config.update("jax_enable_x64", True)
 
@@ -185,6 +185,8 @@ def build(params: dict,
 _PK_GRID_CONFIG = {
     'ede-v2': dict(kmin=5e-4, kmax=10.0,  nk=1000, ndspl=1,  prefac='k3',
                    extrap_kmin=1e-4),
+    'ede-v3': dict(kmin=5e-4, kmax=10.0,  nk=1000, ndspl=1,  prefac='k3',
+                   extrap_kmin=1e-4),
     # Default (everything else: 'lcdm', 'mnu', 'neff', 'wcdm', 'ede', 'mnu-3states')
     '_default': dict(kmin=1e-4, kmax=50.0, nk=5000, ndspl=10, prefac='ell',
                      extrap_kmin=None),
@@ -292,7 +294,7 @@ def _predict_distances(full: dict, z_grid: jax.Array,
 
     # ede-v2 DAZ emulator omits z=0; restore it so chi(0)=0 and the
     # underlying z-grid matches HZ. Mirrors classy_szfast.py:1110.
-    if cosmo_model == 'ede-v2':
+    if cosmo_model in ede_models:
         Da_fine = jnp.concatenate(
             [jnp.zeros(1, dtype=Da_fine.dtype), Da_fine])
 
